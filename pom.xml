@@ -63,7 +63,7 @@
 
 
     <build>
-        <sourceDirectory>src/main</sourceDirectory>
+        <!--<sourceDirectory>src/main</sourceDirectory> -->
         <!--<testSourceDirectory>src/test/scala</testSourceDirectory>-->
         <plugins>
             <plugin>
