@@ -1,4 +1,4 @@
-package bibie
+package edu.umass.cs.iesl.bibie
 
 import cc.factorie.app.nlp.{Document, Sentence, Token, TokenSpan}
 

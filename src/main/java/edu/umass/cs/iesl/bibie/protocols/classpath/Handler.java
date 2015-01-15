@@ -1,4 +1,4 @@
-package bibie.protocols.classpath;
+package edu.umass.cs.iesl.bibie.protocols.classpath;
 
 import java.io.IOException;
 import java.net.URL;

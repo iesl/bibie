@@ -1,4 +1,4 @@
-package bibie
+package edu.umass.cs.iesl.bibie
 
 import cc.factorie._
 import cc.factorie.la._
