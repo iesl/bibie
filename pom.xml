@@ -2,133 +2,114 @@
 <project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>bibie</groupId>
+    <groupId>edu.umass.cs.iesl.bibie</groupId>
     <artifactId>bibie</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-SNAPSHOT</version>
-    <name>ev</name>
+    <version>0.1-SNAPSHOT</version>
+    <name>bibie</name>
     <properties>
-        <maven.compiler.source>1.5</maven.compiler.source>
-        <maven.compiler.target>1.5</maven.compiler.target>
-        <encoding>UTF-8</encoding>
-        <scala.version>2.10.1</scala.version>
+      <scala.majorVersion>2.11</scala.majorVersion>
+      <scala.minorVersion>.1</scala.minorVersion>
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>org.scala-lang</groupId>
-            <artifactId>scala-library</artifactId>
-            <version>2.10.1</version>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.10</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-          <groupId>cc.factorie</groupId>
-          <artifactId>factorie</artifactId>
-          <version>1.1-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-          <groupId>net.sourceforge.jmatio</groupId>
-          <artifactId>jmatio</artifactId>
-          <version>1.0</version>
-        </dependency>
+      <dependency>
+        <groupId>org.scala-lang</groupId>
+        <artifactId>scala-library</artifactId>
+        <version>${scala.majorVersion}${scala.minorVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>cc.factorie</groupId>
+        <artifactId>factorie_${scala.majorVersion}</artifactId>
+        <version>1.1.1</version>
+      </dependency>
+      <dependency>
+        <groupId>net.sourceforge.jmatio</groupId>
+        <artifactId>jmatio</artifactId>
+        <version>1.0</version>
+      </dependency>
     </dependencies>
 
-    <repositories>
-        <repository>
-            <id>scala-tools.org</id>
-            <name>Scala-Tools Maven2 Repository</name>
-            <url>https://oss.sonatype.org/content/groups/scala-tools</url>
-        </repository>
-        <repository>
-            <id>typesafe-repo-cache</id>
-            <name>Typesafe repo cache</name>
-            <url>http://repo.typesafe.com/typesafe/repo1-cache/</url>
-        </repository>
-        <repository>
-            <id>Sonatype</id>
-            <name>Sonatype</name>
-            <url>https://oss.sonatype.org/content/repositories/</url>
-            <layout>default</layout>
-        </repository>
-        <repository>
-          <id>central</id>
-          <url>http://repo1.maven.org/maven2/</url>
-        </repository>
-    </repositories>
+  <distributionManagement>
 
+    <repository>
+      <id>dev-iesl.cs.umass.edu</id>
+      <name>dev-iesl.cs.umass.edu</name>
+      <url>https://dev-iesl.cs.umass.edu/nexus/content/repositories/releases</url>
+    </repository>
+
+    <snapshotRepository>
+      <id>dev-iesl.cs.umass.edu</id>
+      <name>dev-iesl.cs.umass.edu</name>
+      <url>https://dev-iesl.cs.umass.edu/nexus/content/repositories/snapshots</url>
+      <uniqueVersion>false</uniqueVersion>
+    </snapshotRepository>
+
+    <site>
+      <id>ieslwww</id>
+      <name>IESL www repository</name>
+      <url>scp://iesl.cs.umass.edu/m/iesl/data2/www/iesl/maven/factorie</url>
+    </site>
+  </distributionManagement>
 
     <build>
-        <!--<sourceDirectory>src/main</sourceDirectory> -->
-        <!--<testSourceDirectory>src/test/scala</testSourceDirectory>-->
-        <plugins>
-            <plugin>
-                <groupId>net.alchim31.maven</groupId>
-                <artifactId>scala-maven-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>compile</goal>
-                            <goal>testCompile</goal>
-                        </goals>
-                        <configuration>
-                            <args>
-                                <arg>-make:transitive</arg>
-                                <arg>-dependencyfile</arg>
-                                <arg>${project.build.directory}/.scala_dependencies</arg>
-                            </args>
-                        </configuration>
-                    </execution>
-                </executions>
-                <configuration>
-                    <recompileMode>incremental</recompileMode>
-                    <useZincServer>true</useZincServer>
-                    <scalaVersion>${scala.version}</scalaVersion>
-                    <jvmArgs>
-                        <jvmArg>-Xms128m</jvmArg>
-                        <jvmArg>-Xmx2g</jvmArg>
-                    </jvmArgs>
-                </configuration>
-            </plugin>
-            <plugin>
-                           <groupId>org.apache.maven.plugins</groupId>
-                           <artifactId>maven-assembly-plugin</artifactId>
-                           <version>2.4</version>
-                           <configuration>
-                               <descriptorRefs>
-                                   <descriptorRef>jar-with-dependencies</descriptorRef>
-                               </descriptorRefs>
+      <plugins>
+        <plugin>
+          <groupId>net.alchim31.maven</groupId>
+          <artifactId>scala-maven-plugin</artifactId>
+          <version>3.2.0</version>
+          <executions>
+            <execution>
+              <goals>
+                <goal>compile</goal>
+                <goal>testCompile</goal>
+              </goals>
+            </execution>
+          </executions>
+          <configuration>
+            <recompileMode>incremental</recompileMode>
+            <useZincServer>true</useZincServer>
+            <scalaVersion>${scala.majorVersion}${scala.minorVersion}</scalaVersion>
+            <jvmArgs>
+              <jvmArg>-Xms128m</jvmArg>
+              <jvmArg>-Xmx2g</jvmArg>
+            </jvmArgs>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <version>2.4</version>
+          <configuration>
+            <descriptorRefs>
+              <descriptorRef>jar-with-dependencies</descriptorRef>
+            </descriptorRefs>
 
-                           </configuration>
-                           <executions>
-                               <execution>
-                                   <id>assemble-all</id>
-                                   <phase>package</phase>
-                                   <goals>
-                                       <goal>single</goal>
-                                   </goals>
-                               </execution>
-                           </executions>
-                       </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>2.2.1</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>jar-no-fork</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
+          </configuration>
+          <executions>
+            <execution>
+              <id>assemble-all</id>
+              <phase>package</phase>
+              <goals>
+                <goal>single</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>2.2.1</version>
+          <executions>
+            <execution>
+              <id>attach-sources</id>
+              <phase>verify</phase>
+              <goals>
+                <goal>jar-no-fork</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
     </build>
-</project>
+  </project>

@@ -46,7 +46,7 @@ class SegmentSpan(doc: Document, start: Int, length: Int, var latch: Boolean = f
 
 class CitationSpan(doc: Document, labelString: String, start: Int, length: Int) extends TokenSpan(doc.asSection, start, length) {
   val label = new SpanCitationLabel(this, labelString)
-  override def toString() = "CitationSpan(" + length + "," + label.categoryValue + ":" + this.phrase + ")"
+  override def toString() = "CitationSpan(" + length + "," + label.categoryValue + ":" + this.string + ")"
 }
 
 class CitationCRFModel extends TemplateModel with Parameters {
