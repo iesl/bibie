@@ -108,7 +108,7 @@
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
           </descriptorRefs>
-
+          <!--<updateOnly>true</updateOnly> -->
         </configuration>
         <executions>
           <execution>

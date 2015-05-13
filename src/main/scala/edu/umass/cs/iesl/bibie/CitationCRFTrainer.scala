@@ -229,8 +229,8 @@ class CitationCRFTrainer {
     implicit val random = new scala.util.Random
     println("Num TokenFeatures = " + CitationFeaturesDomain.dimensionDomain.size)
 
-    trainDocuments.take(1).foreach(d => d.tokens.foreach(t => println(t.attr[CitationFeatures])))
-    testDocuments.take(1).foreach(d => d.tokens.foreach(t => println(t.attr[CitationFeatures])))
+//    trainDocuments.take(1).foreach(d => d.tokens.foreach(t => println(t.attr[CitationFeatures])))
+//    testDocuments.take(1).foreach(d => d.tokens.foreach(t => println(t.attr[CitationFeatures])))
 
     trainDocuments.take(5).foreach {d =>
       CitationCRFTrainer.printDocument(d)
@@ -457,11 +457,17 @@ object CitationCRFTrainer extends CitationCRFTrainer {
 object TrainCitationModelGrobid {
   URLHandlerSetup.poke()
   def main(args: Array[String]): Unit = {
+    println("TrainCitationModelGrobid")
+
     val opts = new TrainCitationModelOptions
     opts.parse(args)
     val trainer = new CitationCRFTrainer
-    val trainingData = LoadGrobid.fromDir(opts.trainDir.value, n=10)
-    val testingData = LoadGrobid.fromDir(opts.testDir.value, n=5)
+    val trainingData = LoadGrobid.fromDir(opts.trainDir.value)
+
+    val exDoc = trainingData.head
+    exDoc.tokens.foreach { t => println(s"${t.string}\t${t.attr[CitationLabel].categoryValue}") }
+
+    val testingData = LoadGrobid.fromDir(opts.testDir.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
 

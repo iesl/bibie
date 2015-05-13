@@ -12,12 +12,21 @@ import scala.xml.{NodeSeq, Node}
 import scala.collection.mutable.ArrayBuffer
 
 object LoadGrobid {
+
+  var total = 0
+  val tagSet = new scala.collection.mutable.HashSet[String]()
+  val badFiles = new ArrayBuffer[String]()
+
   case class BibSpan(label: String, contents: String, bib: Node) {
     val children = new ArrayBuffer[BibSpan]()
     def +=(c: Node): Unit = children += BibSpan(c.label, c.text, c)
     def toLabeledTokens: Seq[Token] = {
       val d = new Document("")
-      val labelStr = if ((bib \ "@type").text.length > 0) label + "_" + (bib \ "@type").text else label
+      val labelStr =
+        if ((bib \ "@type").text.length > 0) label + "_" + (bib \ "@type").text
+        else if ((bib \ "@level").text.length > 0) label + "_" + (bib \ "@level").text
+        else label
+      tagSet += labelStr
       d.appendString(contents)
       DeterministicTokenizer.process(d)
       val tokenSeq = d.tokens.toSeq
@@ -40,8 +49,9 @@ object LoadGrobid {
     val sentence = new Sentence(doc)
     // FIXME only goes one level down, make this recursive?
     for (c <- bib.nonEmptyChildren) {
-      if (c.label != "#PCDATA") {
-        val thisNode = BibSpan(c.label, c.text, c)
+      if (c.label != "#PCDATA" && c.label != "lb") {
+        val thisLabel = if (c.label == "notes") "note" else c.label
+        val thisNode = BibSpan(thisLabel, c.text, c)
         val tokens = thisNode.toLabeledTokens
         for (token <- tokens) {
           val t = new Token(sentence, token.string)
@@ -49,12 +59,11 @@ object LoadGrobid {
         }
       }
     }
-//    doc.tokens.foreach { t => println(s"${t.string}\t${t.attr[CitationLabel].categoryValue}") }
     doc
   }
 
   def fromFilename(filename: String): Seq[Document] = {
-    println(s"loading: $filename...")
+    total += 1
     val docBuff = new ArrayBuffer[Document]()
     val xml = scala.xml.XML.loadFile(new File(filename))
     //try several different xml structures (some files go <xml><citations> ... , some go <xml><biblList> ... , maybe others
@@ -65,59 +74,27 @@ object LoadGrobid {
         try2
       }
     }
-    assert(root.length > 0, s"bad xml? $root")
-    val bibs = root \\ "bibl"
-    var i = 0
-    while (i < bibs.length) {
-      docBuff += bibToDoc(bibs(i))
-      i += 1
+    if (root.length <= 0) {
+      badFiles += filename
+    } else {
+      val bibs = root \\ "bibl"
+      var i = 0
+      while (i < bibs.length) {
+        docBuff += bibToDoc(bibs(i))
+        i += 1
+      }
     }
-    println("done.")
     docBuff
   }
-  def fromDir(dir: String, n: Int = -1): Seq[Document] =
-    if (n > 0) new File(dir).listFiles.take(n).map(_.getAbsolutePath).flatMap(fromFilename)
+
+  def fromDir(dir: String, n: Int = -1): Seq[Document] = {
+    val docs = if (n > 0) new File(dir).listFiles.take(n).map(_.getAbsolutePath).flatMap(fromFilename)
     else new File(dir).listFiles.map(_.getAbsolutePath).flatMap(fromFilename)
-
-
+    println(s"docs with tags: ${tagSet.mkString(", ")}")
+    println(s"${badFiles.length}/$total files skipped:")
+    badFiles.foreach(println)
+    docs
+  }
 }
 
-//  def getExtractor(n: NodeSeq, p: String) = Extractor(n, p)
-//  def extractor(p: String) = { root: NodeSeq => Extractor(root, p) }
-
-//val elems = Map(
-//"author" -> { root: NodeSeq => Extractor(root, "author") }
-////    "abstract" -> { root: NodeSeq => Extractor(root, "div>type=abstract") },
-////    "author" -> { root: NodeSeq => Extractor(root, "byline>docAuthor") },
-////    "affiliation" -> { root: NodeSeq => Extractor(root, "byline>affiliation") },
-////    "address" -> { root: NodeSeq => Extractor(root, "address") },
-////    "date" -> { root: NodeSeq => Extractor(root, "date") },
-////    "email" -> { root: NodeSeq => Extractor(root, "email") },
-////    "grant" -> { root: NodeSeq => Extractor(root, "note>type=grant") },
-////    "keyword" -> { root: NodeSeq => Extractor(root, "keywords") },
-////    "phone" -> { root: NodeSeq => Extractor(root, "phone") }, //or note type=phone?
-////    "reference" -> { root: NodeSeq => Extractor(root, "reference") }, //or note type=reference?
-////    "submission" -> { root: NodeSeq => Extractor(root, "note>type=submission") },
-////    "title" -> { root: NodeSeq => Extractor(root, "docTitle>titlePart") },
-////    "web" -> { root: NodeSeq => Extractor(root, "ptr")} // or ptr type=web?
-//)
-//
-//class Extractor(root: NodeSeq) {
-//  def apply(pattern: String): Seq[String] = {
-//    val parts = pattern.split(">")
-//    parts.length match {
-//      case 1 => (for (b <- root \\ parts(0)) yield b.text).filter(_.length > 0)
-//      case 2 => parts(1).split("=").length match {
-//        case 1 => (for (b <- root \\ parts(0)) yield (b \\ parts(1)).text).filter(_.length > 0)
-//        case 2 =>
-//          val parent = parts(0); val parentType = parts(1).split("=")(1)
-//          (root \\ parts(0)).map(elem => (elem \ "@type", elem.text)).filter(_._1.text == parentType).map(_._2)
-//      }
-//    }
-//  }
-//}
-//
-//object Extractor {
-//  def apply(root: NodeSeq, pattern: String): Seq[String] = new Extractor(root).apply(pattern)
-//}
 
