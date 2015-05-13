@@ -9,7 +9,7 @@ import cc.factorie.app.strings._
 import cc.factorie.la.{DenseTensor2, Tensor2}
 import cc.factorie.model.DotTemplateWithStatistics2
 import cc.factorie.optimize.{L2Regularization, LBFGS, LikelihoodExample, ThreadLocalBatchTrainer}
-import cc.factorie.util.{BinarySerializer, DefaultCmdOptions}
+import cc.factorie.util.{BinarySerializer}
 import cc.factorie.variable._
 
 object LabelDomain extends CategoricalDomain[String]
@@ -451,7 +451,39 @@ object CitationCRFTrainer extends CitationCRFTrainer {
 //  }
 //}
 
+
 // TODO: add DocumentAnnotator to add citations
+
+object TrainCitationModelGrobid {
+  URLHandlerSetup.poke()
+  def main(args: Array[String]): Unit = {
+    val opts = new TrainCitationModelOptions
+    opts.parse(args)
+    val trainer = new CitationCRFTrainer
+    val trainingData = LoadGrobid.fromDir(opts.trainDir.value, n=10)
+    val testingData = LoadGrobid.fromDir(opts.testDir.value, n=5)
+    val lexiconDir = opts.lexiconUrl.value
+    OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
+
+    println("Training: " + trainingData.size + " Testing: " + testingData.size)
+    val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
+      "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
+      "journal.lst", "names.lst", "publishers.lst")
+    trainer.lexicons = new Lexicons(lexiconDir, lexes)
+    for (d <- trainingData)
+      d.tokens.foreach(trainer.wordToFeatures)
+    trainer.initSentenceFeatures(trainingData)
+    CitationFeaturesDomain.freeze()
+    for (d <- testingData)
+      d.tokens.foreach(trainer.wordToFeatures)
+    trainer.initSentenceFeatures(testingData)
+
+    trainer.train(trainingData, testingData)
+
+    if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
+  }
+}
+
 
 object TrainCitationModel {
   URLHandlerSetup.poke()
@@ -459,8 +491,9 @@ object TrainCitationModel {
     val opts = new TrainCitationModelOptions
     opts.parse(args)
     val trainer = new CitationCRFTrainer
-    val trainingData = LoadHier.fromFile(opts.trainFile.value)
-    val testingData = if (opts.testFile.value.isEmpty) Seq() else LoadHier.fromFile(opts.testFile.value)
+    val trainingData = LoadHier.fromFile(opts.trainFile.value).take(5)
+    val testingData = if (opts.testFile.value.isEmpty) Seq() else LoadHier.fromFile(opts.testFile.value).take(2)
+
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
 
@@ -523,20 +556,22 @@ object TestCitationModel {
   }
 }
 
-class TrainCitationModelOptions extends DefaultCmdOptions {
-  val trainFile = new CmdOption("train-file", "", "FILE", "UMass formatted training file.")
-  val testFile = new CmdOption("test-file", "", "FILE", "UMass formatted testing file (or blank).")
-  val modelFile = new CmdOption("model-file", "citationCRF.factorie", "FILE", "File for saving model.")
-  val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "URL", "URL prefix for lexicon files/resources named cities, companies, companysuffix, countries, days, firstname.high, ...")
+class TrainCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with cc.factorie.app.nlp.SharedNLPCmdOptions {
+  val trainFile = new CmdOption("train-file", "", "STRING", "UMass formatted training file.")
+  val trainDir = new CmdOption("train-dir", "", "STRING", "path to directory of training files")
+  val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted testing file (or blank).")
+  val testDir = new CmdOption("test-dir", "", "STRING", "path to directory of testing files")
+  val modelFile = new CmdOption("model-file", "citationCRF.factorie", "STRING", "File for saving model.")
+  val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "URL prefix for lexicon files/resources named cities, companies, companysuffix, countries, days, firstname.high, ...")
   val saveModel = new CmdOption("save-model", true, "BOOLEAN", "Whether to save the model or just train/test.")
   val rate = new CmdOption("adagrad-rate", 1.0, "FLOAT", "Adagrad learning rate.")
   val delta = new CmdOption("adagrad-delta", 0.1, "FLOAT", "Adagrad delta (ridge).")
 }
 
-class TestCitationModelOptions extends DefaultCmdOptions {
-  val testFile = new CmdOption("test-file", "", "FILE", "UMass formatted testing file.")
-  val modelUrl = new CmdOption("model-url", "file://citationCRF.factorie", "URL", "URL for loading model.")
-  val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "URL", "URL prefix for lexicon files/prefixes named cities, companies, companysuffix, countries, days, firstname.high, ...")
+class TestCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with cc.factorie.app.nlp.SharedNLPCmdOptions {
+  val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted testing file.")
+  val modelUrl = new CmdOption("model-url", "file://citationCRF.factorie", "STRING", "URL for loading model.")
+  val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "URL prefix for lexicon files/prefixes named cities, companies, companysuffix, countries, days, firstname.high, ...")
 }
 
 //class CitationOpts extends DefaultCmdOptions {
