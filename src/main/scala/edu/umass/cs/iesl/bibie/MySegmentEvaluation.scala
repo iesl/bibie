@@ -5,339 +5,204 @@ import cc.factorie.app.nlp._
 
 import scala.collection.mutable.{HashSet, HashMap, ArrayBuffer}
 import scala.util.matching.Regex
+import java.io._
 
 /**
  * Created by kate on 5/14/15.
  */
 class ExactlyLikeGrobidEvaluator(labelDomain: CategoricalDomain[String]) {
-  lazy val baseLabelDomain = labelDomain.categories.map(c => if (c != "O") c.substring(2) else c).toSet.toArray
-  lazy val numLabels = baseLabelDomain.length
-  def labelIdx(c: String): Int = baseLabelDomain.indexOf(c)
-  def labelToBase(l: String): String = if (l == "O") l else l.substring(2)
+  def baseLabel(s: String): String = s.substring(2)
   def evaluate(docs: Seq[Document]): String = {
     val report = new StringBuilder()
-
-    val labels = Array.fill(baseLabelDomain.length)(0)
-    val counterObserved = Array.fill(baseLabelDomain.length)(0)
-    val counterExpected = Array.fill(baseLabelDomain.length)(0)
-    val counterFalsePositive = Array.fill(baseLabelDomain.length)(0)
-    val counterFalseNegative = Array.fill(baseLabelDomain.length)(0)
-
-    //field-level
-    val labels2 = Array.fill(baseLabelDomain.length)(0)
-    val counterObserved2 = Array.fill(baseLabelDomain.length)(0)
-    val counterExpected2 = Array.fill(baseLabelDomain.length)(0)
-    val counterFalsePositive2 = Array.fill(baseLabelDomain.length)(0)
-    val counterFalseNegative2 = Array.fill(baseLabelDomain.length)(0)
-
-    // token-level tabulation
-    for (doc <- docs) {
-      val tokenseq = doc.tokens.toIndexedSeq
-      var i = 0
-      while (i < tokenseq.length) {
-        val token = tokenseq(i)
-        val guess = labelToBase(token.attr[CitationLabel].categoryValue) // "currentToken"
-        val gold = labelToBase(token.attr[CitationLabel].target.categoryValue) // "previousToken"
-        val ind = labelIdx(gold)
-        assert(ind >= 0, s"bad gold label: $gold")
-        if (guess == gold) counterObserved(ind) += 1
-        else {
-          val ind2 = labelIdx(guess)
-          assert(ind2 >= 0, s"bad guess label: $guess")
-          counterFalsePositive(ind2) += 1
-          counterFalseNegative(ind) += 1
+    val labels = new ArrayBuffer[String]()
+    val counterObserved = new ArrayBuffer[Int]()
+    val counterExpected = new ArrayBuffer[Int]()
+    val counterFalsePositive = new ArrayBuffer[Int]()
+    val counterFalseNegative = new ArrayBuffer[Int]()
+    var i = 0
+    while (i < docs.length) {
+      val doc = docs(i)
+      val tokenSeq = doc.tokens.toIndexedSeq
+      var currToken: String = null
+      var prevToken: String = null
+      var j = 0
+      while (j < doc.tokens.size) {
+        val token = tokenSeq(j)
+        currToken = baseLabel(token.attr[CitationLabel].categoryValue)
+        prevToken =
+          if (token.attr.contains(classOf[GoldCitationLabel])) baseLabel(token.attr[GoldCitationLabel].label)
+          else baseLabel(token.attr[CitationLabel].target.categoryValue)
+        val ind = labels.indexOf(prevToken)
+        if (ind != -1) {
+          if (prevToken == currToken) {
+            val count = counterObserved(ind)
+            counterObserved.update(ind, count + 1)
+          } else {
+            val ind2 = labels.indexOf(currToken)
+            if (ind2 != -1) {
+              val count = counterFalsePositive(ind2)
+              counterFalsePositive.update(ind2, count + 1)
+            } else {
+              labels += currToken
+              counterFalsePositive += 1
+              counterObserved += 0
+              counterExpected += 0
+              counterFalseNegative += 0
+            }
+            val count2 = counterFalseNegative(ind)
+            counterFalseNegative.update(ind, count2 + 1)
+          }
+          val count = counterExpected(ind)
+          counterExpected.update(ind, count + 1)
+        } else {
+          labels += prevToken
+          if (prevToken == currToken) {
+            counterObserved += 1
+            counterFalsePositive += 0
+            counterFalseNegative += 0
+          } else {
+            counterObserved += 0
+            counterFalsePositive += 0
+            counterFalseNegative += 1
+            val ind2 = labels.indexOf(currToken)
+            if (ind2 != -1) {
+              val count = counterFalsePositive(ind2)
+              counterFalsePositive.update(ind2, count + 1)
+            } else {
+              labels += currToken
+              counterFalsePositive += 1
+              counterObserved += 0
+              counterExpected += 0
+              counterFalseNegative += 0
+            }
+          }
+          counterExpected += 1
         }
-        counterExpected(ind) += 1
-        i += 1
+        j += 1
       }
+      i += 1
     }
 
     report.append("\n===== Token-level results =====\n\n")
-    report.append(computeMetrics(counterObserved, counterExpected, counterFalsePositive, counterFalseNegative))
+    val tokenLevelMetrics = computeMetrics(labels, counterObserved, counterExpected, counterFalsePositive, counterFalseNegative)
+    report.append(tokenLevelMetrics)
+    val tokenLvlFile = "/iesl/canvas/ksilvers/bibie-exec/tokenLevelMine.eval"
+    println("writing token-level results to file: " + tokenLvlFile)
+    val pw = new PrintWriter(new File(tokenLvlFile))
+    pw.write(tokenLevelMetrics)
+    pw.close()
 
-    // field-level tabulation
-    var allGood: Boolean = true
-    var lastPrevToken: String = null
-    var lastCurrToken: String = null
-    for (doc <- docs) {
-      val tokenseq = doc.tokens.toIndexedSeq
-      var i = 0
-      while (i < tokenseq.length) {
-        val token = tokenseq(i)
-        if (lastPrevToken != null && lastCurrToken != null) {
-          val ind = labelIdx(lastPrevToken)
-          assert(ind >= 0, s"bad label? $lastPrevToken")
-          if (allGood) counterObserved2(ind) += 1
-          else counterFalseNegative2(ind) += 1
-          counterExpected2(ind) += 1
-          val ind2 = labelIdx(lastCurrToken)
-          assert(ind2 >= 0)
-          if (!allGood) counterFalsePositive2(ind2) += 1
-          allGood = true
-          lastPrevToken = null
-          lastCurrToken = null
-          i += 1 // (continue)
-        } else {
-          val prevToken = labelToBase(token.attr[CitationLabel].target.categoryValue)
-          val currToken = labelToBase(token.attr[CitationLabel].categoryValue)
-
-          if ((lastPrevToken != null) && (prevToken != lastPrevToken)) {
-            val ind = labelIdx(lastPrevToken)
-            if (allGood) counterObserved2(ind) += 1
-            else counterFalseNegative2(ind) += 1
-            counterExpected2(ind) += 1
-          }
-
-          if ((lastCurrToken != null) && (currToken != lastCurrToken)) {
-            val ind = labelIdx(lastCurrToken)
-            if (!allGood) counterFalsePositive2(ind) += 1
-          }
-
-          if (((lastPrevToken != null) && (prevToken != lastPrevToken)) ||
-              ((lastCurrToken != null) && (currToken != lastCurrToken))
-          ) allGood = true
-
-          if (currToken != prevToken) allGood = false
-
-          lastPrevToken = prevToken
-          lastCurrToken = currToken
-          i += 1
-        }
-      }
-    }
-
-    if ((lastPrevToken != null) && (lastCurrToken != null)) {
-      //end of last field
-      val ind = labelIdx(lastPrevToken)
-      assert(ind >= 0)
-      if (allGood) counterObserved2(ind) += 1
-      else counterFalseNegative2(ind) += 1
-      counterExpected2(ind) += 1
-      val ind2 = labelIdx(lastCurrToken)
-      assert(ind2 >= 0)
-      if (!allGood) counterFalsePositive2(ind2) += 1
-    }
-
-    report.append("\n===== Field-level results =====\n")
-    report.append(computeMetrics(counterObserved2, counterExpected2, counterFalsePositive2, counterFalseNegative2))
-
-    //TODO "instance level" eval
+    // TODO field-level, instance-level
 
     report.toString()
   }
-  def evaluate2(docs: Seq[Document]): String = {
-    val report = new StringBuilder()
 
-    val labels = Array.fill(baseLabelDomain.length)(0)
-    val counterObserved = Array.fill(baseLabelDomain.length)(0)
-    val counterExpected = Array.fill(baseLabelDomain.length)(0)
-    val counterFalsePositive = Array.fill(baseLabelDomain.length)(0)
-    val counterFalseNegative = Array.fill(baseLabelDomain.length)(0)
-
-    //field-level
-    val labels2 = Array.fill(baseLabelDomain.length)(0)
-    val counterObserved2 = Array.fill(baseLabelDomain.length)(0)
-    val counterExpected2 = Array.fill(baseLabelDomain.length)(0)
-    val counterFalsePositive2 = Array.fill(baseLabelDomain.length)(0)
-    val counterFalseNegative2 = Array.fill(baseLabelDomain.length)(0)
-
-    // token-level tabulation
-    for (doc <- docs) {
-      val tokenseq = doc.tokens.toIndexedSeq
-      var i = 0
-      while (i < tokenseq.length) {
-        val token = tokenseq(i)
-        val guess = labelToBase(token.attr[CitationLabel].categoryValue) // "currentToken"
-        val gold = labelToBase(token.attr[GoldCitationLabel].label) // "previousToken"
-        val ind = labelIdx(gold)
-        assert(ind >= 0, s"bad gold label: $gold")
-        if (guess == gold) counterObserved(ind) += 1
-        else {
-          val ind2 = labelIdx(guess)
-          assert(ind2 >= 0, s"bad guess label: $guess")
-          counterFalsePositive(ind2) += 1
-          counterFalseNegative(ind) += 1
-        }
-        counterExpected(ind) += 1
-        i += 1
-      }
-    }
-
-    report.append("\n===== Token-level results =====\n\n")
-    report.append(computeMetrics(counterObserved, counterExpected, counterFalsePositive, counterFalseNegative))
-
-    // field-level tabulation
-    var allGood: Boolean = true
-    var lastPrevToken: String = null
-    var lastCurrToken: String = null
-    for (doc <- docs) {
-      val tokenseq = doc.tokens.toIndexedSeq
-      var i = 0
-      while (i < tokenseq.length) {
-        val token = tokenseq(i)
-        if (lastPrevToken != null && lastCurrToken != null) {
-          val ind = labelIdx(lastPrevToken)
-          assert(ind >= 0, s"bad label? $lastPrevToken")
-          if (allGood) counterObserved2(ind) += 1
-          else counterFalseNegative2(ind) += 1
-          counterExpected2(ind) += 1
-          val ind2 = labelIdx(lastCurrToken)
-          assert(ind2 >= 0)
-          if (!allGood) counterFalsePositive2(ind2) += 1
-          allGood = true
-          lastPrevToken = null
-          lastCurrToken = null
-          i += 1 // (continue)
-        } else {
-          val prevToken = labelToBase(token.attr[GoldCitationLabel].label)
-          val currToken = labelToBase(token.attr[CitationLabel].categoryValue)
-
-          if ((lastPrevToken != null) && (prevToken != lastPrevToken)) {
-            val ind = labelIdx(lastPrevToken)
-            if (allGood) counterObserved2(ind) += 1
-            else counterFalseNegative2(ind) += 1
-            counterExpected2(ind) += 1
-          }
-
-          if ((lastCurrToken != null) && (currToken != lastCurrToken)) {
-            val ind = labelIdx(lastCurrToken)
-            if (!allGood) counterFalsePositive2(ind) += 1
-          }
-
-          if (((lastPrevToken != null) && (prevToken != lastPrevToken)) ||
-            ((lastCurrToken != null) && (currToken != lastCurrToken))
-          ) allGood = true
-
-          if (currToken != prevToken) allGood = false
-
-          lastPrevToken = prevToken
-          lastCurrToken = currToken
-          i += 1
-        }
-      }
-    }
-
-    if ((lastPrevToken != null) && (lastCurrToken != null)) {
-      //end of last field
-      val ind = labelIdx(lastPrevToken)
-      assert(ind >= 0)
-      if (allGood) counterObserved2(ind) += 1
-      else counterFalseNegative2(ind) += 1
-      counterExpected2(ind) += 1
-      val ind2 = labelIdx(lastCurrToken)
-      assert(ind2 >= 0)
-      if (!allGood) counterFalsePositive2(ind2) += 1
-    }
-
-    report.append("\n===== Field-level results =====\n")
-    report.append(computeMetrics(counterObserved2, counterExpected2, counterFalsePositive2, counterFalseNegative2))
-
-    //TODO "instance level" eval
-
-    report.toString()
-  }
-  def computeMetrics(counterObserved: Array[Int], counterExpected: Array[Int], counterFalsePositive: Array[Int], counterFalseNegative: Array[Int]): String = {
+  def computeMetrics(labels: ArrayBuffer[String],
+                      counterObserved: ArrayBuffer[Int],
+                      counterExpected: ArrayBuffer[Int],
+                      counterFP: ArrayBuffer[Int],
+                      counterFN: ArrayBuffer[Int]): String = {
+    def fmt2(d: Double): String = "%.2f".format(d)
     val report = new StringBuilder()
     report.append("\nlabel\t\taccuracy\tprecision\trecall\t\tf1\n\n")
-    var Array(accum_tp, accum_fp, accum_tn, accum_fn) = Array(0, 0, 0, 0)
-    var Array(accum_f0, accum_accuracy, accum_precision, accum_recall) = Array(0.0, 0.0, 0.0, 0.0)
-    var accum_all = 0
+    class Accum(var tp: Int, var fp: Int, var tn: Int, var fn: Int, var all: Int) {
+      var accuracy: Double = 0.0
+      var f0: Double = 0.0
+      var recall: Double = 0.0
+      var precision: Double = 0.0
+    }
+    val accum = new Accum(0, 0, 0, 0, 0)
     var totalValidFields = 0
     var totalFields = 0
     var i = 0
-    while (i < numLabels) {
+    while (i < labels.size) {
       totalFields += counterExpected(i)
       i += 1
     }
     i = 0
-    while (i < numLabels) {
-      totalFields += counterFalsePositive(i)
+    while (i < labels.size) {
+      totalFields += counterFP(i)
       i += 1
     }
-    var Array(accuracy, precision, recall, f0) = Array(0.0, 0.0, 0.0, 0.0)
+    var accuracy = 0.0
+    var precision = 0.0
+    var recall = 0.0
+    var f0 = 0.0
     i = 0
-    while (i < numLabels) {
-      val label: String = baseLabelDomain(i)
+    while (i < labels.size) {
+      val label = labels(i).trim //FIXME why trim?
       if (label == "other" || label == "base") {
         i += 1
       } else {
-        report.append(label)
-        if (label.length < 12) report.append("\t") //formatting i guess
-        val tp = counterObserved(i) //true pos
-        val fp = counterFalsePositive(i) //false pos
-        val fn = counterFalseNegative(i) //false negs
-        val tn = totalFields - tp - (fp + fn) //true negs
-        val all = counterExpected(i) //all expected
-        if (all != 0) totalValidFields += 1
-        accuracy = (tp + fn) / (tp + fp + tn + fn).toDouble
-        report.append("\t").append("%.2f".format(accuracy*100.0))
-        precision = 0.0
-        if ((tp + fp) == 0) precision = 0.0
-        else precision = (tp.toDouble) / (tp + fp).toDouble
-        report.append("\t\t").append("%.2f".format(precision*100.0))
-        recall = 0.0
-        if ((tp == 0) || (all == 0)) recall = 0.0
-        else recall = (tp.toDouble)/(all.toDouble)
-        report.append("\t\t").append("%.2f".format(recall*100.0))
-        f0 = 0.0
-        if (precision+recall == 0) f0 = 0.0
-        else f0 = (2 * precision * recall) / (precision + recall)
-        report.append("\t\t").append("%.2f".format(f0*100.0))
+        report.append("<" + label + ">")
+        if (label.length < 12) report.append("\t")
+        val tp = counterObserved(i)
+        val fp = counterFP(i)
+        val fn = counterFN(i)
+        val tn = totalFields - tp - (fp + fn)
+        val all = counterExpected(i)
+        if (all != 0) totalValidFields += 1 //FIXME should this be != 0 or != -1?
+
+        accuracy = 1.0 * (tp + tn) / (tp + fp + tn + fn)
+        report.append("\t").append(fmt2(accuracy*100.0))
+
+        precision = if ((tp + fp) == 0) 0.0 else 1.0 * tp / (tp + fp)
+        report.append("\t\t").append(fmt2(precision * 100.0))
+
+        recall = if (tp == 0 || all == 0) 0.0 else 1.0 * tp / all
+        report.append("\t\t").append(fmt2(recall * 100.0))
+
+        f0 = if ((precision + recall) == 0) 0.0 else (2.0 * precision * recall) / (precision + recall)
+        report.append("\t\t").append(fmt2(f0 * 100.0))
+
         report.append("\n")
-        accum_tp += tp; accum_fp += fp; accum_tn += tn; accum_fn += fn
+
+        accum.tp += tp
+        accum.fp += fp
+        accum.tn += tn
+        accum.fn += fn
         if (all != 0) {
-          accum_all += all
-          accum_f0 += f0
-          accum_accuracy += accuracy
-          accum_precision += precision
-          accum_recall += recall
+          accum.all += all
+          accum.accuracy += accuracy
+          accum.f0 += f0
+          accum.precision += precision
+          accum.recall += recall
         }
         i += 1
       }
     }
     report.append("\n")
-    report.append("all fields\t")
+    report.append("all fields (micro)\t")
 
-    //micro avg
-    accuracy = ((accum_tp + accum_tn).toDouble) / ((accum_tp + accum_fp + accum_tn + accum_fn).toDouble)
-    if (accuracy > 1) accuracy = 1.0 // TODO hmmmmm
-    report.append("\t").append("%.2f".format(accuracy*100.0))
-
-    precision = 1.0 * accum_tp / (accum_tp + accum_fp)
-    if (precision > 1) precision = 1.0
-    report.append("\t\t").append("%.2f".format(precision*100.0))
-
-    recall = 1.0 * accum_tp / (accum_tp + accum_fn)
-    if (recall > 1) recall = 1.0
-    report.append("\t\t").append("%.2f".format(recall*100.0))
-
-    f0 = (2 * precision * recall) / (precision + recall)
-    report.append("\t\t").append("%.2f".format(f0*100.0))
-    report.append("\t(micro average)")
+    //micro average
+    accuracy = 1.0 * (accum.tp + accum.tn) / (accum.tp + accum.fp + accum.tn + accum.fn)
+    report.append("\t").append(fmt2(accuracy * 100.0))
+    precision = 1.0 * accum.tp / (accum.tp + accum.fp)
+    report.append("\t\t").append(fmt2(precision * 100.0))
+    recall = 1.0 * accum.fp / accum.all
+    report.append("\t\t").append(fmt2(recall * 100.0))
+    f0 = (2.0 * precision * recall) / (precision + recall)
+    report.append("\t\t").append(fmt2(f0 * 100.0))
+//    report.append("\t(micro average)")
     report.append("\n")
 
-    //macro avg
-    report.append("\t\t")
-    accuracy = accum_accuracy / totalValidFields
-    if (accuracy > 1) accuracy = 1.0
-    report.append("\t").append("%.2f".format(accuracy*100.0))
-
-    precision = accum_precision / totalValidFields
-    if (precision > 1) precision = 1.0
-    report.append("\t\t").append("%.2f".format(precision*100.0))
-
-    recall = accum_recall / totalValidFields
-    if (recall > 1) recall = 1.0
-    report.append("\t\t").append("%.2f".format(recall*100.0))
-
-    f0 = accum_f0 / totalValidFields
-    report.append("\t\t").append("%.2f".format(f0*100.0))
-
-    report.append("\t(macro average)")
+    //macro average
+//    report.append("\t\t")
+    report.append("all fields (macro)\t")
+    accuracy = accum.accuracy / totalValidFields
+    report.append("\t").append(fmt2(accuracy * 100.0))
+    precision = accum.precision / totalValidFields
+    report.append("\t\t").append(fmt2(precision * 100.0))
+    recall = accum.recall / totalValidFields
+    report.append("\t\t").append(fmt2(recall * 100.0))
+    f0 = accum.f0 / totalValidFields
+    report.append("\t\t").append(fmt2(f0 * 100.0))
+//    report.append("\t(macro average)")
     report.append("\n")
 
     report.toString()
   }
+
 }
 
 
