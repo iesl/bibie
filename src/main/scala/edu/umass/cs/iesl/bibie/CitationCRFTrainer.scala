@@ -10,7 +10,7 @@ import cc.factorie.app.strings._
 import cc.factorie.la.{DenseTensor2, Tensor2}
 import cc.factorie.model.DotTemplateWithStatistics2
 import cc.factorie.optimize.{L2Regularization, LBFGS, LikelihoodExample, ThreadLocalBatchTrainer}
-import cc.factorie.util.{BinarySerializer}
+import cc.factorie.util.BinarySerializer
 import cc.factorie.variable._
 
 object LabelDomain extends CategoricalDomain[String]
@@ -417,11 +417,6 @@ object CitationCRFTrainer extends CitationCRFTrainer {
 
 // TODO: add DocumentAnnotator to add citations
 
-
-
-
-
-
 object TrainCitationModel {
   URLHandlerSetup.poke()
   def main(args: Array[String]): Unit = {
@@ -430,6 +425,8 @@ object TrainCitationModel {
     val trainer = new CitationCRFTrainer
     val trainingData = LoadHier.fromFile(opts.trainFile.value).take(5)
     val testingData = if (opts.testFile.value.isEmpty) Seq() else LoadHier.fromFile(opts.testFile.value).take(2)
+
+    trainingData.head.tokens.foreach { t => println(s"${t.string}\t${t.attr[CitationLabel]}")}
 
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
@@ -448,6 +445,14 @@ object TrainCitationModel {
     trainer.initSentenceFeatures(testingData)
 
     trainer.train(trainingData, testingData)
+
+//    val labels = testingData.flatMap(_.tokens).map(_.attr[CitationLabel])
+//    println("process...")
+
+    println("== Field-Level Evaluation ==")
+    testingData.foreach(trainer.process)
+    val fieldEval = new FieldLevelEvaluator(LabelDomain)
+    fieldEval.evaluate(testingData)
 
     if (opts.saveModel.value)
       trainer.serialize(new FileOutputStream(opts.modelFile.value))
@@ -516,9 +521,7 @@ class GrobidCitationCRFTrainer {
   // was this an untrained model being used? we should remove -luke
   var model = new CitationCRFModel
   var loc = 0
-  def addFeatures(doc: Document): Unit = {
 
-  }
   def process(document: Document): Document = {
     if (document.tokens.size == 0) return document
     for (sentence <- document.sentences if sentence.tokens.size > 0) {
@@ -529,6 +532,7 @@ class GrobidCitationCRFTrainer {
     document
   }
   def train(trainDocuments: Seq[Document], testDocuments: Seq[Document]): Unit = {
+    println("training...")
     implicit val random = new scala.util.Random
     // Get the variables to be inferred (for now, just operate on a subset)
     val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]).toSeq
@@ -541,14 +545,7 @@ class GrobidCitationCRFTrainer {
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
     trainDocuments.foreach(process)
     testDocuments.foreach(process)
-    trainDocuments.take(5).foreach { d => CitationCRFTrainer.printDocument(d) }
-    testDocuments.take(5).foreach { d => CitationCRFTrainer.printDocument(d) }
     evaluator.printEvaluation(testDocuments, testDocuments, "FINAL")
-
-    println("TRAIN:")
-    println(new SegmentEvaluation[CitationLabel]("(B|I)-", "I-", LabelDomain, trainLabels.toIndexedSeq))
-    println("\nTEST:")
-    println(new SegmentEvaluation[CitationLabel]("(B|I)-", "I-", LabelDomain, testLabels.toIndexedSeq))
   }
 }
 
@@ -558,11 +555,70 @@ object TrainCitationModelGrobid {
     println("TrainCitationModelGrobid")
     val opts = new TrainCitationModelOptions
     opts.parse(args)
-    val trainer = new CitationCRFTrainer
-    val trainingData = LoadGrobid.fromFilename(opts.trainFile.value)
+    val trainer = new GrobidCitationCRFTrainer
+    val trainingData = LoadGrobid.fromFilename(opts.trainFile.value).take(20)
     CitationFeaturesDomain.freeze()
-    val testingData = LoadGrobid.fromFilename(opts.testFile.value)
+    val testingData = LoadGrobid.fromFilename(opts.testFile.value).take(10)
+
+    val lexiconDir = opts.lexiconUrl.value
+    OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
+
     trainer.train(trainingData, testingData)
-    if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
+
+    testingData.foreach(trainer.process)
+
+    println("== Evaluation ==")
+    val evaluator = new ExactlyLikeGrobidEvaluator(LabelDomain)
+    println(evaluator.evaluate(testingData))
+
+//    val fieldEval = new FieldLevelEvaluator(LabelDomain)
+//    fieldEval.evaluate(testingData)
+
+//    if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
+  }
+}
+
+object TestCitationModelGrobid {
+  URLHandlerSetup.poke()
+  def main(args: Array[String]): Unit = {
+    val opts = new TrainCitationModelOptions
+    opts.parse(args)
+//    val modelFile = opts.modelFile.value
+//    val trainer = new CitationCRFTrainer
+//    trainer.deserialize(new URL(modelFile).openStream())
+    val data = LoadGrobid.fromFilenameLabeled(opts.testFile.value)
+    val nDocs = data.length
+    val nTokens = data.flatMap(_.tokens).length
+    val nLabels = LabelDomain.categories.size
+    println(s"loaded $nDocs docs with $nTokens tokens; using $nLabels labels")
+
+    println("string\tgold\tguess")
+    data.head.tokens
+      .filter { t => t.attr[GoldCitationLabel].label != t.attr[CitationLabel].categoryValue }
+      .foreach { t => println(s"${t.string}\t${t.attr[GoldCitationLabel].label}\t${t.attr[CitationLabel].categoryValue}") }
+
+    println("=== Evaluation ===")
+    val evaluator = new ExactlyLikeGrobidEvaluator(LabelDomain)
+    println(evaluator.evaluate(data))
+
+
+//    val opts = new TrainCitationModelOptions
+//    opts.parse(args)
+//    val modelFile = opts.modelFile.value
+//    val trainer = new CitationCRFTrainer
+//    trainer.deserialize(new URL(modelFile).openStream())
+//    val data = LoadGrobid.fromFilename(opts.testFile.value)
+//    val nDocs = data.length
+//    val nTokens = data.flatMap(_.tokens).length
+//    val nLabels = LabelDomain.categories.size
+//    println(s"loaded $nDocs docs with $nTokens tokens; using $nLabels labels")
+//    val exDoc = data.head
+//    exDoc.tokens.foreach { tok => println(s"${tok.string}\t${tok.attr[CitationLabel].categoryValue}")}
+//    //freeze domain?
+//    val labels = data.flatMap(_.tokens).map(_.attr[CitationLabel])
+//    println("process...")
+//    data.foreach(trainer.process)
+//    val fieldEval = new FieldLevelEvaluator(LabelDomain)
+//    fieldEval.evaluate(data)
   }
 }
