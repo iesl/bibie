@@ -453,8 +453,8 @@ object TrainCitationModel {
 
     println("== Field-Level Evaluation ==")
     testingData.foreach(trainer.process)
-    val fieldEval = new FieldLevelEvaluator(LabelDomain)
-    fieldEval.evaluate(testingData)
+//    val fieldEval = new FieldLevelEvaluator(LabelDomain)
+//    fieldEval.evaluate(testingData)
 
     if (opts.saveModel.value)
       trainer.serialize(new FileOutputStream(opts.modelFile.value))

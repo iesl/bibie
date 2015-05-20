@@ -499,13 +499,14 @@ class EvalLine(val label: String, val accuracy: Double, val precision: Double, v
   override def toString: String = s"$label\t\t$accuracy\t\t$precision\t\t$recall\t\t$f0"
 }
 object EvalLine {
-  val whitespace = "\t+".r
+  val whitespace = "(\\s\\s)+".r
   def apply(s: String): EvalLine = {
     val parts = whitespace.split(s).filter(_.length > 0)
-    assert(parts.length >= 5, s"bad line? $s")
+    assert(parts.length >= 5, s"bad line? $s --> [${parts.mkString(",")}] (${parts.length})")
     //    println("parts: " + parts.mkString(", "))
     val Array(label, accuracy, precision, recall, f0) = parts.take(5)
-    new EvalLine(label, accuracy.toDouble, precision.toDouble, recall.toDouble, f0.toDouble)
+    val labelNorm = if (!label.startsWith("<")) "<" + label + ">" else label
+    new EvalLine(labelNorm, accuracy.toDouble, precision.toDouble, recall.toDouble, f0.toDouble)
   }
 }
 /** Data structure for comparison/analysis of evaluations produced by GROBID and ExactlyLikeGrobidEvaluator **/
@@ -526,6 +527,7 @@ class Eval(val lines: Seq[EvalLine]) {
 
 object Eval {
   def apply(filename: String): Eval = {
+    println(s"loading Eval from $filename ...")
     val lines = scala.io.Source.fromFile(filename).getLines().toSeq
     val evalLines = lines.filter(_.length > 0).drop(1).map(l => EvalLine(l))
     new Eval(evalLines)
