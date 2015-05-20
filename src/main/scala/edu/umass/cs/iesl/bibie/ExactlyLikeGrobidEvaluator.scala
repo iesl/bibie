@@ -13,6 +13,12 @@ import scala.io.Source
  * Created by kate on 5/14/15.
  */
 
+/**
+ * TODO remove <other> field from evals / output
+ * TODO instance-level evaluation
+ * TODO verify ELGEval == GROBID Eval
+ */
+
 /** Close to verbatim copy of GROBID evaluation (in grobid-trainer, EvaluationUtilities.evaluateStandard) **/
 class ExactlyLikeGrobidEvaluator {
 
@@ -276,6 +282,14 @@ class ExactlyLikeGrobidEvaluator {
     report.toString()
   }
 
+  def evaluateInstanceLevel(theResult: String): String = {
+    val report = new StringBuilder()
+    val result = theResult.replace("\n\n", "\n \n")
+
+    report.toString()
+
+  }
+
   /** compute precision, recall, and f1 scores (both micro and macro averaged). Variables named "f0" should probably
     * be changed to "f1" **/
   def computeMetrics(labels: List[String],
@@ -537,7 +551,7 @@ object Eval {
 /** Compare two Eval's **/
 object Comparison {
   def main(args: Array[String]): Unit = {
-    println(args)
+//    println(args)
 
     val f1 = args(0)
     val f2 = args(1)
@@ -546,14 +560,16 @@ object Comparison {
     val eval2 = Eval(args(1))
     println(eval1.equals(eval2))
 
-    println(s"$f1: labels = ${eval1.labels.mkString(", ")}")
-    println(s"$f2: labels = ${eval2.labels.mkString(", ")}")
+//    println(s"$f1: labels = ${eval1.labels.mkString(", ")}")
+//    println(s"$f2: labels = ${eval2.labels.mkString(", ")}")
 
-    println(s"=== ${args(0)} (eval1) ===")
+    println(s"=== $f1 (eval1) ===")
     println(eval1.toString)
+    println("")
 
-    println(s"=== ${args(1)} (eval2) ===")
+    println(s"=== $f2 (eval2) ===")
     println(eval2.toString)
+    println("")
 
     println(s"=== DIFF ($f1 - $f1) ===")
     val diff = eval1.diff(eval2)
