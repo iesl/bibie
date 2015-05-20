@@ -13,24 +13,23 @@ import scala.io.Source
  * Created by kate on 5/14/15.
  */
 
+/** Close to verbatim copy of GROBID evaluation (in grobid-trainer, EvaluationUtilities.evaluateStandard) **/
 class ExactlyLikeGrobidEvaluator {
-  def grobidLabel(c: String): String =
-    if (c.startsWith("B-")) "I-" + c.substring(2)
-    else if (c.startsWith("I-")) c.substring(2)
-    else c
-  def evaluate(docs: Seq[Document], filename: String, withBIO: Boolean): String = {
+
+  def evaluate(docs: Seq[Document], filename: String): String = {
     writeFile(docs, filename)
-    evaluate(filename, withBIO=withBIO)
+    evaluate(filename)
   }
-  def evaluate(filename: String, withBIO: Boolean): String = {
+
+  def evaluate(filename: String): String = {
     val report = new StringBuilder()
     val theResult = loadFile(filename)
-    report.append(evaluateTokenLevel(theResult, withBIO))
-    report.append(evaluateFieldLevel(theResult, withBIO))
+    report.append(evaluateTokenLevel(theResult))
+    report.append(evaluateFieldLevel(theResult))
     report.toString()
   }
 
-  def evaluateFieldLevel(theResult: String, withBIO: Boolean): String = {
+  def evaluateFieldLevel(theResult: String): String = {
     val report = new StringBuilder()
     val labels = new ArrayBuffer[String]()
     val counterObserved = new ArrayBuffer[Int]()
@@ -192,7 +191,7 @@ class ExactlyLikeGrobidEvaluator {
     report.toString()
   }
 
-  def evaluateTokenLevel(theResult: String, withBIO: Boolean): String = {
+  def evaluateTokenLevel(theResult: String): String = {
     val report = new StringBuilder()
     val labels = new ArrayBuffer[String]()
     val counterObserved = new ArrayBuffer[Int]()
@@ -277,6 +276,8 @@ class ExactlyLikeGrobidEvaluator {
     report.toString()
   }
 
+  /** compute precision, recall, and f1 scores (both micro and macro averaged). Variables named "f0" should probably
+    * be changed to "f1" **/
   def computeMetrics(labels: List[String],
                      counterObserved: List[Int],
                      counterExpected: List[Int],
@@ -432,13 +433,21 @@ class ExactlyLikeGrobidEvaluator {
 
     report.toString()
   }
+
+  /**
+   * Data in [filename] should be tab-separated and structured as follows:
+   *
+   * feature1 feature2  ... feature_d gold_label  predicted_label
+   *
+   * where each line corresponds to a token. [filename] should contain all documents. Documents should be separated by
+   * newlines.
+   */
   def loadFile(filename: String): String = {
     var lineCount = 0
     var line: String = null
     val okayLines = new ArrayBuffer[String]()
     try {
       val buffReader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"))
-      var theResult: String = null
       line = buffReader.readLine()
       while (line != null) {
         okayLines += line
@@ -449,15 +458,23 @@ class ExactlyLikeGrobidEvaluator {
     } catch {
       case e: Exception => println(e)
     }
-    println("got lineCount = " + lineCount)
+//    println("got lineCount = " + lineCount)
     okayLines.mkString("\n")
   }
+
+  /** write [docs] to [filename] in the format described in the comment on loadFile **/
   def writeFile(docs: Seq[Document], filename: String): Unit = {
+    def grobidLabel(c: String): String =
+      if (c.startsWith("B-")) "I-" + c.substring(2)
+      else if (c.startsWith("I-")) c.substring(2)
+      else c
     println(s"writing output to: $filename ...")
     val pw = new PrintWriter(new File(filename))
     docs.foreach { doc =>
       doc.tokens.foreach { token =>
         val feats = List(token.string, 0).mkString("\t")
+        /* here, token will have attr GoldCitationLabel if it was loaded from a file produced by GROBID directly
+        (see LoadGrobid.loadFromFilenameLabeled) */
         val gold = grobidLabel(
           if (token.attr.contains(classOf[GoldCitationLabel])) token.attr[GoldCitationLabel].label
           else token.attr[CitationLabel].target.categoryValue
@@ -472,199 +489,75 @@ class ExactlyLikeGrobidEvaluator {
   }
 }
 
-class FieldLevelEvaluator(labelDomain: CategoricalDomain[String]) {
-  case class EvalField(label: String) {
-    var trueNeg = 0; var truePos = 0; var falseNeg = 0; var falsePos = 0; var numExpected = 0
-    def precision: Double = if (truePos + falsePos > 0) truePos.toDouble / (truePos + falsePos) else 0.0
-    def recall: Double = if (truePos + falseNeg > 0) truePos.toDouble / (truePos + falseNeg) else 0.0
-    def f1: Double = {
-      val p = precision; val r = recall
-      if (p + r > 0) (2.0*p*r) / (p+r) else 0.0
-    }
-    override def toString: String = "%-8s f1=%-6f p=%-6f r=%-6f (tp=%d fp=%d fn=%d true=%d pred=%d)".format(label, f1, precision, recall, truePos, falsePos, falseNeg, numExpected, truePos+falsePos)
+/** Data structure for comparison/analysis of evaluations produced by GROBID and ExactlyLikeGrobidEvaluator **/
+class EvalLine(val label: String, val accuracy: Double, val precision: Double, val recall: Double, val f0: Double) {
+  def equals(other: EvalLine): Boolean = label == other.label && accuracy == other.accuracy && precision == other.precision && recall == other.recall && f0 == other.f0
+  def diff(other: EvalLine): EvalLine = {
+    assert(label == other.label, s"labels dont match: this=$label , other=${other.label}")
+    new EvalLine(label, accuracy-other.accuracy, precision-other.precision, recall-other.recall, f0-other.f0)
   }
-  def evaluate(docs: Seq[Document]): Double = {
-    val fields = new HashMap[String, EvalField]()
-    val baseCategories = labelDomain.categories.toSet
-    println(s"labels: ${baseCategories.mkString(", ")}")
-    baseCategories.foreach { c => fields(c) = new EvalField(c) }
-    docs.foreach { doc =>
-      val tokenseq = doc.tokens.toSeq
-      var i = 0
-      //      var lastSeen = tokenseq.head
-      while (i < tokenseq.length) {
-        val token = tokenseq(i)
-        val guess = token.attr[CitationLabel].categoryValue
-        val gold = token.attr[CitationLabel].target.categoryValue
-        fields(gold).numExpected += 1
-        if (guess == gold) fields(gold).truePos += 1
-        else if (guess != gold) {
-          fields(guess).falsePos += 1
-          fields(gold).falseNeg += 1
-        }
-        i += 1
-      }
-    }
-    var avg = 0.0
-    fields.foreach { case (label, eval) =>
-      println(eval.toString)
-      avg += eval.f1
-    }
-    val overall = avg / fields.size.toDouble
-    println(s"OVERALL: $overall")
-    overall
+  override def toString: String = s"$label\t\t$accuracy\t\t$precision\t\t$recall\t\t$f0"
+}
+object EvalLine {
+  val whitespace = "\t+".r
+  def apply(s: String): EvalLine = {
+    val parts = whitespace.split(s).filter(_.length > 0)
+    assert(parts.length >= 5, s"bad line? $s")
+    //    println("parts: " + parts.mkString(", "))
+    val Array(label, accuracy, precision, recall, f0) = parts.take(5)
+    new EvalLine(label, accuracy.toDouble, precision.toDouble, recall.toDouble, f0.toDouble)
+  }
+}
+/** Data structure for comparison/analysis of evaluations produced by GROBID and ExactlyLikeGrobidEvaluator **/
+class Eval(val lines: Seq[EvalLine]) {
+  def equals(other: Eval): Boolean =
+    (lines.length == other.lines.length) &&
+      lines.zip(other.lines).forall { case (l1, l2) => l1.equals(l2) }
+  def diff(other: Eval): Eval = {
+    assert(lines.length == other.lines.length, "eval lengths dont match")
+    val l1Sorted = lines.sortBy { case l => l.label }
+    val l2Sorted = other.lines.sortBy { case l => l.label }
+    val diffs = l1Sorted.zip(l2Sorted).map { case (l1, l2) => l1.diff(l2) }
+    new Eval(diffs)
+  }
+  def labels: Set[String] = lines.map(_.label).toSet
+  override def toString: String = lines.map(_.toString).mkString("\n")
+}
+
+object Eval {
+  def apply(filename: String): Eval = {
+    val lines = scala.io.Source.fromFile(filename).getLines().toSeq
+    val evalLines = lines.filter(_.length > 0).drop(1).map(l => EvalLine(l))
+    new Eval(evalLines)
   }
 }
 
+/** Compare two Eval's **/
+object Comparison {
+  def main(args: Array[String]): Unit = {
+    println(args)
 
-/** Evaluate in terms of correct entire segments.
-    The field start and end boundaries must be perfect to count as correct.  No partial credit.
-    For example, this is the standard for results on CoNLL 2003. */
-class MyPerSegmentEvaluation(val labelName:String, val labelValueStart: Regex, val labelValueContinue: Regex) {
-  //println("PerSegmentEvaluation "); println(labelName); println(labelValueStart); println(labelValueContinue); println
-  //if (labelValueContinue == null) labelValueContinue = labelValueStart // Waiting for Scala 2.8 default parameters
+    val f1 = args(0)
+    val f2 = args(1)
 
-  var targetCount, predictedCount, correctCount = 0 // per segment
+    val eval1 = Eval(args(0))
+    val eval2 = Eval(args(1))
+    println(eval1.equals(eval2))
 
-  def ++=(tokenseqs:Seq[IndexedSeq[{def label:LabeledMutableCategoricalVar[String]}]]): Unit = tokenseqs.foreach(ts => this.+=(ts.map(_.label)))  // TODO this triggers reflection
+    println(s"$f1: labels = ${eval1.labels.mkString(", ")}")
+    println(s"$f2: labels = ${eval2.labels.mkString(", ")}")
 
-  /* Find out if we are at the beginning of a segment.
-   * This complicated conditional is necessary to make the start pattern "(B|I)-" work
-   * for both BIO and IOB formats. We are at a start if either (a) only labelValueStart
-   * matches, or (b) labelValueContinue matches and the previous label doesn't match
-   * The (b) case makes it work for IOB notation, in which "B-*" is only used at the
-   * boundary between two like-categoried mentions. */
-  protected def isSegmentStart(x:String, prev:String) =
-    (isStart(x) && !isContinue(x)) || (isContinue(x) && (prev == null || isBackground(prev)))
-  protected def isBackground(x:String) = !isStart(x) && !isContinue(x)
-  protected def isStart(x:String) = labelValueStart.pattern.matcher(x).matches
-  protected def isContinue(x:String) = labelValueContinue.pattern.matcher(x).matches
+    println(s"=== ${args(0)} (eval1) ===")
+    println(eval1.toString)
 
-  /** Add the given sequence of labels to the statistics for this evalution.
+    println(s"=== ${args(1)} (eval2) ===")
+    println(eval2.toString)
 
-      Note: Putting all Label instances across all sentences in a single Seq[]
-      may result in slightly incorrect results at document boundaries: when one
-      document ends in a mention and the next document begins with the same
-      mention type, they will be counted as only one mention, when they should
-      have been counted as two. */
-  def +=(labels: IndexedSeq[LabeledMutableCategoricalVar[String]]): Unit = {
-    //println("PerSegmentEvaluation += "+labels.size)
-    var predictedStart, targetStart = false
-    for (position <- 0 until labels.length) {
-      val label = labels(position)
-      val labelPrevValue: String = if (position > 0) labels(position - 1).categoryValue else null
-      val labelPrevTargetValue: String = if (position > 0) labels(position - 1).target.categoryValue else null
-
-      //print("\n"+label.token.word+"="+label.trueValue+"/"+label.value+" ")
-      predictedStart = false; targetStart = false
-
-      // Find out if we are at the beginning of a segment.
-      if (isSegmentStart(label.categoryValue, labelPrevValue)) {
-        predictedCount += 1
-        predictedStart = true
-        //print("ps ")
-      }
-
-      if (isSegmentStart(label.target.categoryValue, labelPrevTargetValue)) {
-        targetCount += 1
-        targetStart = true
-        //print("ts ")
-      }
-
-      // Truth and prediction both agree that a segment is starting here, let's see if they end in the same place
-      if (predictedStart && targetStart) {
-        if(position == labels.length-1)
-          correctCount += 1 // Both sequences ended at the same position: correct
-        else { //Otherwise lets be sure they end at the same place
-        var predictedContinue, targetContinue = false
-          var j = position + 1
-          var stopSearchForSegmentEnd = false
-          while (j < labels.length && !stopSearchForSegmentEnd) {
-            val label2 = labels(j)
-            predictedContinue = isContinue(label2.categoryValue)
-            targetContinue = isContinue(label2.target.categoryValue)
-            // if true or predicted segment ends (i.e. is not a continue) or we reach the end of our label sequence.
-            if (!predictedContinue || !targetContinue || j == labels.length - 1) {
-              if (predictedContinue == targetContinue) {
-                correctCount += 1 // Both sequences ended at the same position: correct
-              }
-              stopSearchForSegmentEnd = true
-            }
-            j += 1
-          }
-        }
-      }
-    }
-  }
-  def precision = if (predictedCount == 0) 1.0 else correctCount.toDouble / predictedCount
-  def recall = if (targetCount == 0) 1.0 else correctCount.toDouble / targetCount
-  def f1 = if (recall+precision == 0.0) 0.0 else (2.0 * recall * precision) / (recall + precision)
-  def alarmCount = predictedCount - correctCount
-  def missCount = targetCount - correctCount
-  def tp = correctCount
-  def fn = missCount
-  def fp = alarmCount
-  override def toString = "%-8s f1=%-6f p=%-6f r=%-6f (tp=%d fp=%d fn=%d true=%d pred=%d)".format(labelName, f1, precision, recall, tp, fp, fn, targetCount, predictedCount)
-}
+    println(s"=== DIFF ($f1 - $f1) ===")
+    val diff = eval1.diff(eval2)
+    println(diff.toString)
 
 
-// Some utilities for automatically filling in values
-object MySegmentEvaluation {
-  // Assume that the first two characters of each label are the "B-" or "I-" prefix.  Skip the label "O" because it is less than 3 chars long
-  def labelStringsToBase(labelVals:Seq[String]): Seq[String] = {
-    val result = new HashSet[String]
-    labelVals.foreach(s => if (s.length > 2) result += s)//.substring(2))
-    result.toSeq
   }
 }
-// For defaultStartPrefix = "(B|I)-" Although just "B-" would be enough for BIO, "(B|I)-" is needed for IOB
-// For BILOU you should use startPrefix = "(B|U)-" and continuePrefix = "(I|L)-"
-class MySegmentEvaluation[L<:LabeledMutableCategoricalVar[String]](baseLabelStrings: Seq[String], startPrefix:String = "(B|I)-", continuePrefix:String = "I-") {
-  def this(startPrefix:String, continuePrefix:String, labelDomain:CategoricalDomain[String]) = this(MySegmentEvaluation.labelStringsToBase(labelDomain.map(_.category)), startPrefix, continuePrefix)
-  def this(startPrefix:String, continuePrefix:String, labelDomain:CategoricalDomain[String], labels:IndexedSeq[L]) = {
-    this(MySegmentEvaluation.labelStringsToBase(labelDomain.map(_.category)), startPrefix, continuePrefix)
-    this += labels
-  }
-  def this(labelDomain:CategoricalDomain[String]) = this(MySegmentEvaluation.labelStringsToBase(labelDomain.map(_.category)))
-  // Grab the domain from the first label in the Seq; assume all the domains are the same
-  def this(labels:IndexedSeq[L]) = { this(labels.head.domain); this.+=(labels) }
-  private val evals = new HashMap[String,MyPerSegmentEvaluation]
-  private var labelCount = 0
-  private var labelCorrectCount = 0
-  evals ++= baseLabelStrings.map(s => (s, new MyPerSegmentEvaluation(s, (startPrefix+s).r, (continuePrefix+s).r)))
-  /** Return the LabelEvaluation specific to labelString. */
-  def apply(labelString:String) = evals(labelString)
-  def +=(labels: IndexedSeq[L]): Unit = {
-    evals.values.foreach(eval => eval += labels)
-    labelCount += labels.length
-    labels.foreach(label => if (label.valueIsTarget) labelCorrectCount += 1)
-  }
 
-  // This is a per-label measure
-  def tokenAccuracy = labelCorrectCount.toDouble / labelCount
-  // The rest are per-segment
-  def correctCount = evals.values.foldLeft(0)(_+_.correctCount)
-  def predictedCount = evals.values.foldLeft(0)(_+_.predictedCount)
-
-  def targetCount = evals.values.foldLeft(0)(_+_.targetCount)
-  def precision = if (predictedCount == 0) 1.0 else correctCount.toDouble / predictedCount
-  def recall = if (targetCount == 0) 1.0 else correctCount.toDouble / targetCount
-  def f1: Double = if (precision + recall == 0.0) 0.0 else 2.0 * precision * recall / (precision + recall)
-  def alarmCount = predictedCount - correctCount
-  def missCount = targetCount - correctCount
-  def tp = correctCount
-  def fn = missCount
-  def fp = alarmCount
-  def summaryString = "%-8s f1=%-6f p=%-6f r=%-6f (tp=%d fp=%d fn=%d true=%d pred=%d) acc=%-5f (%d/%d)\n".format("OVERALL", f1, precision, recall, tp, fp, fn, tp+fn, tp+fp, tokenAccuracy, labelCorrectCount, labelCount)
-  override def toString = {
-    val sb = new StringBuffer
-    //sb.append("ACCURACY "+tokenAccuracy+" ("+labelCorrectCount+"/"+labelCount+")")
-    //sb.append("\n")
-    sb.append(summaryString)
-    evals.keys.toList.sortWith(_<_).foreach(l => {
-      sb.append(evals(l).toString)
-      sb.append("\n")
-    })
-    sb.toString
-  }
-}

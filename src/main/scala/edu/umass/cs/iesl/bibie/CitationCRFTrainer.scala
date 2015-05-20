@@ -584,30 +584,16 @@ object TrainCitationModelGrobid {
     val opts = new TrainCitationModelOptions
     opts.parse(args)
     val trainer = new GrobidCitationCRFTrainer
-    val trainingData = LoadGrobid.fromFilename(opts.trainFile.value).take(20)
+    val trainingData = LoadGrobid.fromFilename(opts.trainFile.value)//.take(20)
     CitationFeaturesDomain.freeze()
-    val testingData = LoadGrobid.fromFilename(opts.testFile.value).take(10)
+    val testingData = LoadGrobid.fromFilename(opts.testFile.value)//.take(10)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
     trainer.train(trainingData, testingData)
     testingData.foreach(trainer.process)
 
-    println(s"writing output to: ${opts.outputFile.value} ...")
-    val pw = new PrintWriter(new File(opts.outputFile.value))
-    testingData.foreach { doc =>
-      doc.tokens.foreach { token =>
-        val feats = List(0, 0, 0).mkString("\t")
-        val gold = token.attr[CitationLabel].target.categoryValue
-        val guess = token.attr[CitationLabel].categoryValue
-        val str = List(feats, gold, guess).mkString("\t")
-        pw.write(str + "\n")
-      }
-      pw.write("\n")
-    }
-    pw.close()
-
     val evaluator = new ExactlyLikeGrobidEvaluator
-    val eval = evaluator.evaluate(opts.outputFile.value, withBIO=true)
+    val eval = evaluator.evaluate(testingData, opts.outputFile.value)
     println(eval)
 
     if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
@@ -634,7 +620,7 @@ object TestCitationModelGrobid {
 
     val evaluator = new ExactlyLikeGrobidEvaluator
     val outFile = "/home/kate/research/bibie/tmp.txt"
-    val eval = evaluator.evaluate(data, outFile, withBIO=true)
+    val eval = evaluator.evaluate(data, outFile)
     println(eval)
 
 //    val evaluator = new ExactlyLikeGrobidEvaluator(LabelDomain)
@@ -644,72 +630,4 @@ object TestCitationModelGrobid {
 }
 
 
-class EvalLine(val label: String, val accuracy: Double, val precision: Double, val recall: Double, val f0: Double) {
-  def equals(other: EvalLine): Boolean = label == other.label && accuracy == other.accuracy && precision == other.precision && recall == other.recall && f0 == other.f0
-  def diff(other: EvalLine): EvalLine = {
-    assert(label == other.label, s"labels dont match: this=$label , other=${other.label}")
-    new EvalLine(label, accuracy-other.accuracy, precision-other.precision, recall-other.recall, f0-other.f0)
-  }
-  override def toString: String = s"$label\t\t$accuracy\t\t$precision\t\t$recall\t\t$f0"
-}
-object EvalLine {
-  val whitespace = "\t+".r
-  def apply(s: String): EvalLine = {
-    val parts = whitespace.split(s).filter(_.length > 0)
-    assert(parts.length >= 5, s"bad line? $s")
-//    println("parts: " + parts.mkString(", "))
-    val Array(label, accuracy, precision, recall, f0) = parts.take(5)
-    new EvalLine(label, accuracy.toDouble, precision.toDouble, recall.toDouble, f0.toDouble)
-  }
-}
-class Eval(val lines: Seq[EvalLine]) {
-  def equals(other: Eval): Boolean =
-    (lines.length == other.lines.length) &&
-      lines.zip(other.lines).forall { case (l1, l2) => l1.equals(l2) }
-  def diff(other: Eval): Eval = {
-    assert(lines.length == other.lines.length, "eval lengths dont match")
-    val l1Sorted = lines.sortBy { case l => l.label }
-    val l2Sorted = other.lines.sortBy { case l => l.label }
-    val diffs = l1Sorted.zip(l2Sorted).map { case (l1, l2) => l1.diff(l2) }
-    new Eval(diffs)
-  }
-  def labels: Set[String] = lines.map(_.label).toSet
-  override def toString: String = lines.map(_.toString).mkString("\n")
-}
-
-object Eval {
-  def apply(filename: String): Eval = {
-    val lines = scala.io.Source.fromFile(filename).getLines().toSeq
-    val evalLines = lines.filter(_.length > 0).drop(1).map(l => EvalLine(l))
-    new Eval(evalLines)
-  }
-}
-
-object Comparison {
-  def main(args: Array[String]): Unit = {
-    println(args)
-
-    val f1 = args(0)
-    val f2 = args(1)
-
-    val eval1 = Eval(args(0))
-    val eval2 = Eval(args(1))
-    println(eval1.equals(eval2))
-
-    println(s"$f1: labels = ${eval1.labels.mkString(", ")}")
-    println(s"$f2: labels = ${eval2.labels.mkString(", ")}")
-
-    println(s"=== ${args(0)} (eval1) ===")
-    println(eval1.toString)
-
-    println(s"=== ${args(1)} (eval2) ===")
-    println(eval2.toString)
-
-    println(s"=== DIFF ($f1 - $f1) ===")
-    val diff = eval1.diff(eval2)
-    println(diff.toString)
-
-
-  }
-}
 
