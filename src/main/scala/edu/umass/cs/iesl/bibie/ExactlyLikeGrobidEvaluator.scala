@@ -21,6 +21,7 @@ import scala.io.Source
 
 /** Close to verbatim copy of GROBID evaluation (in grobid-trainer, EvaluationUtilities.evaluateStandard) **/
 class ExactlyLikeGrobidEvaluator {
+  def fmt2(d: Double): String = "%.2f".format(d)
 
   def evaluate(docs: Seq[Document], filename: String): String = {
     writeFile(docs, filename)
@@ -32,6 +33,7 @@ class ExactlyLikeGrobidEvaluator {
     val theResult = loadFile(filename)
     report.append(evaluateTokenLevel(theResult))
     report.append(evaluateFieldLevel(theResult))
+    report.append(evaluateInstanceLevel(theResult))
     report.toString()
   }
 
@@ -285,9 +287,37 @@ class ExactlyLikeGrobidEvaluator {
   def evaluateInstanceLevel(theResult: String): String = {
     val report = new StringBuilder()
     val result = theResult.replace("\n\n", "\n \n")
-
+    val stt = new StringTokenizer(result, "\n")
+    var allGood: Boolean = true
+    var correctInstance = 0
+    var totalInstance = 0
+    while (stt.hasMoreTokens) {
+      val line = stt.nextToken()
+      if ((line.trim.length == 0) || (!stt.hasMoreTokens)) {
+        totalInstance += 1
+        if (allGood) correctInstance += 1
+        allGood = true
+      } else {
+        val st = new StringTokenizer(line, "\t")
+        var currToken: String = null
+        var prevToken: String = null
+        while (st.hasMoreTokens) {
+          currToken = st.nextToken()
+          if (currToken != null) {
+            if (currToken.startsWith("I-") || currToken.startsWith("E-"))
+              currToken = currToken.substring(2, currToken.length)
+          }
+          if (st.hasMoreTokens) prevToken = currToken
+          if (!currToken.equals(prevToken)) allGood = false
+        } //while
+      }
+    }
+    report.append("\n===== Instance-level results =====\n\n")
+    report.append("Total expected instances: \t\t").append(totalInstance).append("\n")
+    report.append("Correct instances: \t\t").append(correctInstance).append("\n")
+    val accuracy = 1.0 * correctInstance / (totalInstance)
+    report.append("Instance-level recall:\t").append(fmt2(accuracy * 100)).append("\n\n")
     report.toString()
-
   }
 
   /** compute precision, recall, and f1 scores (both micro and macro averaged). Variables named "f0" should probably
@@ -297,7 +327,7 @@ class ExactlyLikeGrobidEvaluator {
                      counterExpected: List[Int],
                      counterFP: List[Int],
                      counterFN: List[Int]): String = {
-    def fmt2(d: Double): String = "%.2f".format(d)
+
     val report = new StringBuilder()
     report.append("\nlabel\t\taccuracy\tprecision\trecall\t\tf1\n\n")
 
