@@ -6,205 +6,471 @@ import cc.factorie.app.nlp._
 import scala.collection.mutable.{HashSet, HashMap, ArrayBuffer}
 import scala.util.matching.Regex
 import java.io._
+import java.util.StringTokenizer
+import scala.io.Source
 
 /**
  * Created by kate on 5/14/15.
  */
-class ExactlyLikeGrobidEvaluator(labelDomain: CategoricalDomain[String]) {
-  def baseLabel(s: String): String = s.substring(2)
-  def evaluate(docs: Seq[Document]): String = {
+
+class ExactlyLikeGrobidEvaluator {
+  def grobidLabel(c: String): String =
+    if (c.startsWith("B-")) "I-" + c.substring(2)
+    else if (c.startsWith("I-")) c.substring(2)
+    else c
+  def evaluate(docs: Seq[Document], filename: String, withBIO: Boolean): String = {
+    writeFile(docs, filename)
+    evaluate(filename, withBIO=withBIO)
+  }
+  def evaluate(filename: String, withBIO: Boolean): String = {
+    val report = new StringBuilder()
+    val theResult = loadFile(filename)
+    report.append(evaluateTokenLevel(theResult, withBIO))
+    report.append(evaluateFieldLevel(theResult, withBIO))
+    report.toString()
+  }
+
+  def evaluateFieldLevel(theResult: String, withBIO: Boolean): String = {
     val report = new StringBuilder()
     val labels = new ArrayBuffer[String]()
     val counterObserved = new ArrayBuffer[Int]()
     val counterExpected = new ArrayBuffer[Int]()
-    val counterFalsePositive = new ArrayBuffer[Int]()
-    val counterFalseNegative = new ArrayBuffer[Int]()
-    var i = 0
-    while (i < docs.length) {
-      val doc = docs(i)
-      val tokenSeq = doc.tokens.toIndexedSeq
-      var currToken: String = null
-      var prevToken: String = null
-      var j = 0
-      while (j < doc.tokens.size) {
-        val token = tokenSeq(j)
-        currToken = baseLabel(token.attr[CitationLabel].categoryValue)
-        prevToken =
-          if (token.attr.contains(classOf[GoldCitationLabel])) baseLabel(token.attr[GoldCitationLabel].label)
-          else baseLabel(token.attr[CitationLabel].target.categoryValue)
-        val ind = labels.indexOf(prevToken)
-        if (ind != -1) {
-          if (prevToken == currToken) {
-            val count = counterObserved(ind)
-            counterObserved.update(ind, count + 1)
-          } else {
-            val ind2 = labels.indexOf(currToken)
-            if (ind2 != -1) {
-              val count = counterFalsePositive(ind2)
-              counterFalsePositive.update(ind2, count + 1)
-            } else {
-              labels += currToken
-              counterFalsePositive += 1
-              counterObserved += 0
-              counterExpected += 0
-              counterFalseNegative += 0
-            }
-            val count2 = counterFalseNegative(ind)
-            counterFalseNegative.update(ind, count2 + 1)
-          }
-          val count = counterExpected(ind)
-          counterExpected.update(ind, count + 1)
-        } else {
-          labels += prevToken
-          if (prevToken == currToken) {
-            counterObserved += 1
-            counterFalsePositive += 0
-            counterFalseNegative += 0
-          } else {
-            counterObserved += 0
-            counterFalsePositive += 0
-            counterFalseNegative += 1
-            val ind2 = labels.indexOf(currToken)
-            if (ind2 != -1) {
-              val count = counterFalsePositive(ind2)
-              counterFalsePositive.update(ind2, count + 1)
-            } else {
-              labels += currToken
-              counterFalsePositive += 1
-              counterObserved += 0
-              counterExpected += 0
-              counterFalseNegative += 0
-            }
-          }
-          counterExpected += 1
+    val counterFP = new ArrayBuffer[Int]()
+    val counterFN = new ArrayBuffer[Int]()
+
+    var allGood: Boolean = true
+    var lastPrevToken: String = null
+    var lastCurrToken: String = null
+    var line: String = null
+    val stt = new StringTokenizer(theResult, "\n")
+    while (stt.hasMoreTokens) {
+      line = stt.nextToken()
+      if ((line.trim.length == 0) && (lastPrevToken != null) && (lastCurrToken != null)) {
+        var index = labels.indexOf(lastPrevToken)
+        if (index == -1) {
+          labels += lastPrevToken
+          counterObserved += 0
+          counterExpected += 0
+          counterFP += 0
+          counterFN += 0
+          index = labels.indexOf(lastPrevToken)
         }
-        j += 1
+        if (allGood) {
+          val count = counterObserved(index)
+          counterObserved.update(index, count+1)
+        } else {
+          val count = counterFN(index)
+          counterFN.update(index, count+1)
+        }
+        val count = counterExpected(index)
+        counterExpected.update(index, count+1)
+
+        index = labels.indexOf(lastCurrToken)
+        if (index == -1) {
+          labels += lastCurrToken
+          counterObserved += 0
+          counterExpected += 0
+          counterFP += 0
+          counterFN += 0
+          index = labels.indexOf(lastCurrToken)
+        }
+        if (!allGood) {
+          val v = counterFP(index)
+          counterFP.update(index, v+1)
+        }
+        allGood = true
+        lastPrevToken = null
+        lastCurrToken = null
+        //continue
+      } else {
+        val st = new StringTokenizer(line, "\t ")
+        var currToken: String = null
+        var prevToken: String = null
+        while (st.hasMoreTokens) {
+          currToken = st.nextToken()
+          if (currToken != null) {
+            if (currToken.startsWith("I-") || currToken.startsWith("E-")) {
+              currToken = currToken.substring(2, currToken.length)
+            }
+          }
+          if (st.hasMoreTokens) {
+            prevToken = currToken
+          }
+        }
+        if ((prevToken == null) || (currToken == null)) {
+          lastPrevToken = null
+          lastCurrToken = null
+          //continue
+        } else {
+
+          if ((lastPrevToken != null) && (!prevToken.equals(lastPrevToken))) {
+            if (!labels.contains(lastPrevToken)) {
+              labels += (lastPrevToken)
+              counterObserved += 0
+              counterExpected += 0
+              counterFP += 0
+              counterFN += 0
+            }
+            val index = labels.indexOf(lastPrevToken)
+            if (allGood) {
+              val v = counterObserved(index)
+              counterObserved.update(index, v+1)
+            } else {
+              val v = counterFN(index)
+              counterFN.update(index, v+1)
+            }
+            val v = counterExpected(index)
+            counterExpected.update(index, v+1)
+          }
+
+          if ((lastCurrToken != null) && (!currToken.equals(lastCurrToken))) {
+            if (!labels.contains(lastCurrToken)) {
+              labels += lastCurrToken
+              counterObserved += 0
+              counterExpected += 0
+              counterFP += 0
+              counterFN += 0
+            }
+            val index = labels.indexOf(lastCurrToken)
+            if (!allGood) {
+              val v = counterFP(index)
+              counterFP.update(index, v + 1)
+            }
+          }
+
+          if (((lastPrevToken != null) && (!(prevToken == lastPrevToken))) || ((lastCurrToken != null) && (!(currToken == lastCurrToken)))) {
+            allGood = true
+          }
+
+          if (!currToken.equals(prevToken)) allGood = false
+
+          lastPrevToken = prevToken
+          lastCurrToken = currToken
+
+        }
       }
-      i += 1
     }
 
-    report.append("\n===== Token-level results =====\n\n")
-    val tokenLevelMetrics = computeMetrics(labels, counterObserved, counterExpected, counterFalsePositive, counterFalseNegative)
-    report.append(tokenLevelMetrics)
-    val tokenLvlFile = "/iesl/canvas/ksilvers/bibie-exec/tokenLevelMine.eval"
-    println("writing token-level results to file: " + tokenLvlFile)
-    val pw = new PrintWriter(new File(tokenLvlFile))
-    pw.write(tokenLevelMetrics)
-    pw.close()
+    if ((lastPrevToken != null) && (lastCurrToken != null)) {
+      var index = labels.indexOf(lastPrevToken)
+      if (index == -1) {
+        labels += lastPrevToken
+        counterObserved += 0
+        counterExpected += 0
+        counterFP += 0
+        counterFN += 0
+        index = labels.indexOf(lastPrevToken)
+      }
+      if (allGood) {
+        val v = counterObserved(index)
+        counterObserved.update(index, v+1)
+      } else {
+        val v = counterFN(index)
+        counterFN.update(index, v+1)
+      }
+      val v = counterExpected(index)
+      counterExpected.update(index, v+1)
 
-    // TODO field-level, instance-level
+      index = labels.indexOf(lastCurrToken)
+      if (index == -1) {
+        labels += lastCurrToken
+        counterObserved += 0
+        counterExpected += 0
+        counterFP += 0
+        counterFN += 0
+        index = labels.indexOf(lastCurrToken)
+      }
+      if (!allGood) {
+        val v = counterFP(index)
+        counterFP.update(index, v+1)
+      }
+    }
 
+    report.append("\n===== Field-level results =====\n")
+    val fieldLevelMetrics = computeMetrics(labels.toList, counterObserved.toList, counterExpected.toList, counterFP.toList, counterFN.toList)
+    report.append(fieldLevelMetrics)
     report.toString()
   }
 
-  def computeMetrics(labels: ArrayBuffer[String],
-                      counterObserved: ArrayBuffer[Int],
-                      counterExpected: ArrayBuffer[Int],
-                      counterFP: ArrayBuffer[Int],
-                      counterFN: ArrayBuffer[Int]): String = {
+  def evaluateTokenLevel(theResult: String, withBIO: Boolean): String = {
+    val report = new StringBuilder()
+    val labels = new ArrayBuffer[String]()
+    val counterObserved = new ArrayBuffer[Int]()
+    val counterExpected = new ArrayBuffer[Int]()
+    val counterFP = new ArrayBuffer[Int]()
+    val counterFN = new ArrayBuffer[Int]()
+
+    var line: String = null
+    //    val theResult = loadFile(filename)
+
+    val stt = new StringTokenizer(theResult, "\n")
+    while (stt.hasMoreTokens) {
+      line = stt.nextToken()
+      if (line.trim.length != 0) {
+        val st = new StringTokenizer(line, "\t ")
+        var currToken: String = null
+        var prevToken: String = null
+        while (st.hasMoreTokens) {
+          currToken = st.nextToken()
+          if (currToken != null) {
+            if (currToken.startsWith("I-") || currToken.startsWith("E-")) {
+              currToken = currToken.substring(2, currToken.length)
+            }
+          }
+          if (st.hasMoreTokens) prevToken = currToken
+        }
+
+        if ((prevToken != null) && (currToken != null)) {
+          val ind = labels.indexOf(prevToken)
+          if (ind != -1) {
+            if (prevToken == currToken) {
+              val count = counterObserved(ind)
+              counterObserved.update(ind, count+1)
+            } else {
+              val ind2 = labels.indexOf(currToken)
+              if (ind2 != -1) {
+                val count = counterFP(ind2)
+                counterFP.update(ind2, count+1)
+              } else {
+                labels += currToken
+                counterFP += 1
+                counterObserved += 0
+                counterExpected += 0
+                counterFN += 0
+              }
+              val count2 = counterFN(ind)
+              counterFN.update(ind, count2+1)
+            }
+            val count = counterExpected(ind)
+            counterExpected.update(ind, count+1)
+          } else {
+            labels += prevToken
+            if (prevToken == currToken) {
+              counterObserved += 1
+              counterFP += 0
+              counterFN += 0
+            } else {
+              counterObserved += 0
+              counterFP += 0
+              counterFN += 1
+              val ind2 = labels.indexOf(currToken)
+              if (ind2 != -1) {
+                val count = counterFP(ind2)
+                counterFP.update(ind2, count+1)
+              } else {
+                labels += currToken
+                counterFP += 1
+                counterObserved += 0
+                counterExpected += 0
+                counterFN += 0
+              }
+            }
+            counterExpected += 1
+          }
+        }
+      }
+    } // while (stt.hasMoreTokens)
+
+    report.append("\n===== Token-level results =====\n\n")
+    val tokenLevelMetrics = computeMetrics(labels.toList, counterObserved.toList, counterExpected.toList, counterFP.toList, counterFN.toList)
+    report.append(tokenLevelMetrics)
+    report.toString()
+  }
+
+  def computeMetrics(labels: List[String],
+                     counterObserved: List[Int],
+                     counterExpected: List[Int],
+                     counterFP: List[Int],
+                     counterFN: List[Int]): String = {
     def fmt2(d: Double): String = "%.2f".format(d)
     val report = new StringBuilder()
     report.append("\nlabel\t\taccuracy\tprecision\trecall\t\tf1\n\n")
-    class Accum(var tp: Int, var fp: Int, var tn: Int, var fn: Int, var all: Int) {
-      var accuracy: Double = 0.0
-      var f0: Double = 0.0
-      var recall: Double = 0.0
-      var precision: Double = 0.0
-    }
-    val accum = new Accum(0, 0, 0, 0, 0)
+
+    var cumulated_tp = 0
+    var cumulated_fp = 0
+    var cumulated_tn = 0
+    var cumulated_fn = 0
+    var cumulated_f0 = 0.0
+    var cumulated_accuracy = 0.0
+    var cumulated_precision = 0.0
+    var cumulated_recall = 0.0
+    var cumulated_all = 0
     var totalValidFields = 0
+
     var totalFields = 0
     var i = 0
     while (i < labels.size) {
       totalFields += counterExpected(i)
       i += 1
     }
+
     i = 0
     while (i < labels.size) {
       totalFields += counterFP(i)
       i += 1
     }
+
     var accuracy = 0.0
     var precision = 0.0
     var recall = 0.0
     var f0 = 0.0
     i = 0
     while (i < labels.size) {
-      val label = labels(i).trim //FIXME why trim?
-      if (label == "other" || label == "base") {
+      val label = labels(i).trim
+      if (label.equals("<other>") || label.equals("base")) {
         i += 1
+        //continue
       } else {
-        report.append("<" + label + ">")
-        if (label.length < 12) report.append("\t")
-        val tp = counterObserved(i)
-        val fp = counterFP(i)
-        val fn = counterFN(i)
-        val tn = totalFields - tp - (fp + fn)
-        val all = counterExpected(i)
-        if (all != 0) totalValidFields += 1 //FIXME should this be != 0 or != -1?
+        report.append(label)
+        if (label.length < 12) {
+          report.append("\t")
+        }
+        var tp = counterObserved(i) // true positives
+        var fp = counterFP(i) // false positives
+        var fn = counterFN(i) // false negative
+        var tn = totalFields - tp - (fp + fn) // true negatives
+        var all = counterExpected(i) // all expected
+
+        if (all != 0) {
+          totalValidFields += 1
+        }
 
         accuracy = 1.0 * (tp + tn) / (tp + fp + tn + fn)
-        report.append("\t").append(fmt2(accuracy*100.0))
+        report.append("\t").append(fmt2(accuracy * 100))
 
-        precision = if ((tp + fp) == 0) 0.0 else 1.0 * tp / (tp + fp)
-        report.append("\t\t").append(fmt2(precision * 100.0))
+        // report.append("\t"+ "-")
 
-        recall = if (tp == 0 || all == 0) 0.0 else 1.0 * tp / all
-        report.append("\t\t").append(fmt2(recall * 100.0))
+        precision = 0.0
+        if ((tp + fp) == 0) {
+          precision = 0.0
+        } else {
+          precision = 1.0 * (tp) / (tp + fp)
+        }
+        report.append("\t\t").append(fmt2(precision * 100))
 
-        f0 = if ((precision + recall) == 0) 0.0 else (2.0 * precision * recall) / (precision + recall)
-        report.append("\t\t").append(fmt2(f0 * 100.0))
+        recall = 0.0
+        if ((tp == 0) || (all == 0)) {
+          recall = 0.0
+        } else {
+          recall = 1.0 * (tp) / all
+        }
+        report.append("\t\t").append(fmt2(recall * 100))
+
+        f0 = 0.0
+        if (precision + recall == 0) {
+          f0 = 0.0
+        } else {
+          f0 = (2 * precision * recall) / (precision + recall)
+        }
+        report.append("\t\t").append(fmt2(f0 * 100))
 
         report.append("\n")
 
-        accum.tp += tp
-        accum.fp += fp
-        accum.tn += tn
-        accum.fn += fn
+        cumulated_tp += tp
+        cumulated_fp += fp
+        cumulated_tn += tn
+        cumulated_fn += fn
         if (all != 0) {
-          accum.all += all
-          accum.accuracy += accuracy
-          accum.f0 += f0
-          accum.precision += precision
-          accum.recall += recall
+          cumulated_all += all
+          cumulated_f0 += f0
+          cumulated_accuracy += accuracy
+          cumulated_precision += precision
+          cumulated_recall += recall
         }
         i += 1
       }
     }
+
     report.append("\n")
     report.append("all fields (micro)\t")
 
-    //micro average
-    accuracy = 1.0 * (accum.tp + accum.tn) / (accum.tp + accum.fp + accum.tn + accum.fn)
-    report.append("\t").append(fmt2(accuracy * 100.0))
-    precision = 1.0 * accum.tp / (accum.tp + accum.fp)
-    report.append("\t\t").append(fmt2(precision * 100.0))
-    recall = 1.0 * accum.fp / accum.all
-    report.append("\t\t").append(fmt2(recall * 100.0))
-    f0 = (2.0 * precision * recall) / (precision + recall)
-    report.append("\t\t").append(fmt2(f0 * 100.0))
-//    report.append("\t(micro average)")
+    // micro average over measures
+    accuracy = 1.0 * (cumulated_tp + cumulated_tn) / (cumulated_tp + cumulated_fp + cumulated_tn + cumulated_fn)
+    if (accuracy > 1)
+      accuracy = 1.0
+    report.append("\t").append(fmt2(accuracy * 100))
+
+    precision = 1.0 * cumulated_tp / (cumulated_tp + cumulated_fp)
+    if (precision > 1)
+      precision = 1.0
+    report.append("\t\t").append(fmt2(precision * 100))
+
+    //recall = (1.0 * cumulated_tp) / (cumulated_tp + cumulated_fn)
+    recall = (1.0 * cumulated_tp) / (cumulated_all)
+    if (recall > 1)
+      recall = 1.0
+    report.append("\t\t").append(fmt2(recall * 100)).append(" ")
+
+    f0 = (2 * precision * recall) / (precision + recall)
+    report.append("\t\t").append(fmt2(f0 * 100))
+    //		report.append("\t(micro average)")
     report.append("\n")
 
-    //macro average
-//    report.append("\t\t")
     report.append("all fields (macro)\t")
-    accuracy = accum.accuracy / totalValidFields
-    report.append("\t").append(fmt2(accuracy * 100.0))
-    precision = accum.precision / totalValidFields
-    report.append("\t\t").append(fmt2(precision * 100.0))
-    recall = accum.recall / totalValidFields
-    report.append("\t\t").append(fmt2(recall * 100.0))
-    f0 = accum.f0 / totalValidFields
-    report.append("\t\t").append(fmt2(f0 * 100.0))
-//    report.append("\t(macro average)")
+    // macro average over measures
+    //		report.append("\t\t")
+    accuracy = cumulated_accuracy / (totalValidFields)
+    if (accuracy > 1)
+      accuracy = 1.0
+    report.append("\t").append(fmt2(accuracy * 100))
+
+    precision = cumulated_precision / totalValidFields
+    if (precision > 1)
+      precision = 1.0
+    report.append("\t\t").append(fmt2(precision * 100))
+
+    recall = cumulated_recall / totalValidFields
+    if (recall > 1)
+      recall = 1.0
+    report.append("\t\t").append(fmt2(recall * 100))
+
+    f0 = cumulated_f0 / totalValidFields
+    report.append("\t\t").append(fmt2(f0 * 100))
+
+    //		report.append("\t(macro average)")
     report.append("\n")
 
     report.toString()
   }
-
+  def loadFile(filename: String): String = {
+    var lineCount = 0
+    var line: String = null
+    val okayLines = new ArrayBuffer[String]()
+    try {
+      val buffReader = new BufferedReader(new InputStreamReader(new FileInputStream(filename), "UTF-8"))
+      var theResult: String = null
+      line = buffReader.readLine()
+      while (line != null) {
+        okayLines += line
+        lineCount += 1
+        line = buffReader.readLine()
+      }
+      buffReader.close()
+    } catch {
+      case e: Exception => println(e)
+    }
+    println("got lineCount = " + lineCount)
+    okayLines.mkString("\n")
+  }
+  def writeFile(docs: Seq[Document], filename: String): Unit = {
+    println(s"writing output to: $filename ...")
+    val pw = new PrintWriter(new File(filename))
+    docs.foreach { doc =>
+      doc.tokens.foreach { token =>
+        val feats = List(token.string, 0).mkString("\t")
+        val gold = grobidLabel(
+          if (token.attr.contains(classOf[GoldCitationLabel])) token.attr[GoldCitationLabel].label
+          else token.attr[CitationLabel].target.categoryValue
+        )
+        val guess = grobidLabel(token.attr[CitationLabel].categoryValue)
+        val str = List(feats, gold, guess).mkString("\t")
+        pw.write(str + "\n")
+      }
+      pw.write("\n")
+    }
+    pw.close()
+  }
 }
-
 
 class FieldLevelEvaluator(labelDomain: CategoricalDomain[String]) {
   case class EvalField(label: String) {
@@ -225,7 +491,7 @@ class FieldLevelEvaluator(labelDomain: CategoricalDomain[String]) {
     docs.foreach { doc =>
       val tokenseq = doc.tokens.toSeq
       var i = 0
-//      var lastSeen = tokenseq.head
+      //      var lastSeen = tokenseq.head
       while (i < tokenseq.length) {
         val token = tokenseq(i)
         val guess = token.attr[CitationLabel].categoryValue
@@ -241,8 +507,8 @@ class FieldLevelEvaluator(labelDomain: CategoricalDomain[String]) {
     }
     var avg = 0.0
     fields.foreach { case (label, eval) =>
-        println(eval.toString)
-        avg += eval.f1
+      println(eval.toString)
+      avg += eval.f1
     }
     val overall = avg / fields.size.toDouble
     println(s"OVERALL: $overall")

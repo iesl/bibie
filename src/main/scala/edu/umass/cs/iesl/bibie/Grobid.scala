@@ -82,11 +82,20 @@ object LoadGrobid {
     val lines = Source.fromFile(filename).getLines()
     var tokenCount = 0
     var docCount = 0
-    while (lines.hasNext) {
-      val line = lines.next()
+
+    assert(lines.nonEmpty, s"no lines loaded from $filename")
+
+    val okayLines = new ArrayBuffer[String]()
+    try {
+      while (lines.hasNext) okayLines += lines.next()
+    } catch {
+      case e: Exception => println(e)
+    }
+
+    for (line <- okayLines) {
+//      val line = lines.next()
       val parts = whitespace.split(line)
       if (parts.length > 1) {
-
         val guessLabel = {
           val l = parts.last.dropRight(1)
           if (l.startsWith("I-<")) {
@@ -97,7 +106,6 @@ object LoadGrobid {
             "I-" + ll
           }
         }
-
         val trueLabel = {
           val l = parts.dropRight(1).last.dropRight(1)
           if (l.startsWith("I-<")) {
@@ -108,7 +116,6 @@ object LoadGrobid {
             "I-" + ll
           }
         }
-
         val string = parts.head
         val features = parts.dropRight(1)
         val token = new Token(currSent, string)
@@ -127,6 +134,7 @@ object LoadGrobid {
         }
       }
     }
+
     println(s"Loaded $docCount docs with $tokenCount tokens from file $filename.")
     buff
   }

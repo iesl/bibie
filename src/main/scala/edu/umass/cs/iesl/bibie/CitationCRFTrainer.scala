@@ -23,6 +23,8 @@ class CitationLabel(labelname: String, val token: Token) extends CLabel(labelnam
   def hasPrev = token.hasPrev && token.prev != null
   def next = token.next
   def prev = token.prev
+
+
 }
 
 object CitationFeaturesDomain extends CategoricalVectorDomain[String]
@@ -504,6 +506,7 @@ class TrainCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with 
   val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted testing file (or blank).")
   val testDir = new CmdOption("test-dir", "", "STRING", "path to directory of testing files")
   val evalFile = new CmdOption("eval", "", "STRING", "filename to which to write evaluation")
+  val outputFile = new CmdOption("output", "", "STRING", "output filename")
   val modelFile = new CmdOption("model-file", "citationCRF.factorie", "STRING", "File for saving model.")
   val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "URL prefix for lexicon files/resources named cities, companies, companysuffix, countries, days, firstname.high, ...")
   val saveModel = new CmdOption("save-model", true, "BOOLEAN", "Whether to save the model or just train/test.")
@@ -548,6 +551,31 @@ class GrobidCitationCRFTrainer {
     testDocuments.foreach(process)
     evaluator.printEvaluation(testDocuments, testDocuments, "FINAL")
   }
+
+  def serialize(stream: OutputStream) {
+    import cc.factorie.util.CubbieConversions._
+    val is = new DataOutputStream(stream)
+    BinarySerializer.serialize(LabelDomain, is)
+    BinarySerializer.serialize(CitationFeaturesDomain.dimensionDomain, is)
+    BinarySerializer.serialize(model, is)
+    is.close()
+  }
+  def deserialize(stream: InputStream): Unit = deserialize(model, stream)
+
+  def deserialize(theModel: CitationCRFModel, stream: InputStream) {
+    import cc.factorie.util.CubbieConversions._
+    val is = new DataInputStream(stream)
+    BinarySerializer.deserialize(LabelDomain, is)
+    LabelDomain.freeze()
+    println("deserialized labeldomain")
+    BinarySerializer.deserialize(CitationFeaturesDomain.dimensionDomain, is)
+    CitationFeaturesDomain.freeze()
+    println("deserialized featuresdomain")
+
+    BinarySerializer.deserialize(theModel, is)
+    println("deserialized model")
+    is.close()
+  }
 }
 
 object TrainCitationModelGrobid {
@@ -556,22 +584,33 @@ object TrainCitationModelGrobid {
     val opts = new TrainCitationModelOptions
     opts.parse(args)
     val trainer = new GrobidCitationCRFTrainer
-    val trainingData = LoadGrobid.fromFilename(opts.trainFile.value)//.take(20)
+    val trainingData = LoadGrobid.fromFilename(opts.trainFile.value).take(20)
     CitationFeaturesDomain.freeze()
-    val testingData = LoadGrobid.fromFilename(opts.testFile.value)//.take(10)
+    val testingData = LoadGrobid.fromFilename(opts.testFile.value).take(10)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
     trainer.train(trainingData, testingData)
     testingData.foreach(trainer.process)
-    val evaluator = new ExactlyLikeGrobidEvaluator(LabelDomain)
-    val eval = evaluator.evaluate(testingData)
+
+    println(s"writing output to: ${opts.outputFile.value} ...")
+    val pw = new PrintWriter(new File(opts.outputFile.value))
+    testingData.foreach { doc =>
+      doc.tokens.foreach { token =>
+        val feats = List(0, 0, 0).mkString("\t")
+        val gold = token.attr[CitationLabel].target.categoryValue
+        val guess = token.attr[CitationLabel].categoryValue
+        val str = List(feats, gold, guess).mkString("\t")
+        pw.write(str + "\n")
+      }
+      pw.write("\n")
+    }
+    pw.close()
+
+    val evaluator = new ExactlyLikeGrobidEvaluator
+    val eval = evaluator.evaluate(opts.outputFile.value, withBIO=true)
     println(eval)
-//    val resultsFile = opts.evalFile.value
-//    val pw = new PrintWriter(new File(resultsFile))
-//    pw.write(eval)
-//    pw.close()
-//    println("done.")
-//    if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
+
+    if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
   }
 }
 
@@ -581,14 +620,25 @@ object TestCitationModelGrobid {
     val opts = new TrainCitationModelOptions
     opts.parse(args)
 
+//    println(s"test file: ${opts.testFile.value}")
+//    val evaluator = new ExactlyLikeGrobidEvaluator
+//    val eval = evaluator.evaluate(opts.testFile.value, withBIO=false)
+//    println(eval)
+
+    println(s"loading file: ${opts.testFile.value}")
     val data = LoadGrobid.fromFilenameLabeled(opts.testFile.value)
     val nDocs = data.length
     val nTokens = data.flatMap(_.tokens).length
     val nLabels = LabelDomain.categories.size
     println(s"loaded $nDocs docs with $nTokens tokens; using $nLabels labels")
 
-    val evaluator = new ExactlyLikeGrobidEvaluator(LabelDomain)
-    println(evaluator.evaluate(data))
+    val evaluator = new ExactlyLikeGrobidEvaluator
+    val outFile = "/home/kate/research/bibie/tmp.txt"
+    val eval = evaluator.evaluate(data, outFile, withBIO=true)
+    println(eval)
+
+//    val evaluator = new ExactlyLikeGrobidEvaluator(LabelDomain)
+//    println(evaluator.evaluate(data))
 
   }
 }
@@ -607,7 +657,7 @@ object EvalLine {
   def apply(s: String): EvalLine = {
     val parts = whitespace.split(s).filter(_.length > 0)
     assert(parts.length >= 5, s"bad line? $s")
-    println("parts: " + parts.mkString(", "))
+//    println("parts: " + parts.mkString(", "))
     val Array(label, accuracy, precision, recall, f0) = parts.take(5)
     new EvalLine(label, accuracy.toDouble, precision.toDouble, recall.toDouble, f0.toDouble)
   }
@@ -618,9 +668,12 @@ class Eval(val lines: Seq[EvalLine]) {
       lines.zip(other.lines).forall { case (l1, l2) => l1.equals(l2) }
   def diff(other: Eval): Eval = {
     assert(lines.length == other.lines.length, "eval lengths dont match")
-    val diffs = lines.zip(other.lines).map { case (l1, l2) => l1.diff(l2) }
+    val l1Sorted = lines.sortBy { case l => l.label }
+    val l2Sorted = other.lines.sortBy { case l => l.label }
+    val diffs = l1Sorted.zip(l2Sorted).map { case (l1, l2) => l1.diff(l2) }
     new Eval(diffs)
   }
+  def labels: Set[String] = lines.map(_.label).toSet
   override def toString: String = lines.map(_.toString).mkString("\n")
 }
 
@@ -635,9 +688,16 @@ object Eval {
 object Comparison {
   def main(args: Array[String]): Unit = {
     println(args)
+
+    val f1 = args(0)
+    val f2 = args(1)
+
     val eval1 = Eval(args(0))
     val eval2 = Eval(args(1))
     println(eval1.equals(eval2))
+
+    println(s"$f1: labels = ${eval1.labels.mkString(", ")}")
+    println(s"$f2: labels = ${eval2.labels.mkString(", ")}")
 
     println(s"=== ${args(0)} (eval1) ===")
     println(eval1.toString)
@@ -645,7 +705,7 @@ object Comparison {
     println(s"=== ${args(1)} (eval2) ===")
     println(eval2.toString)
 
-    println("=== DIFF ===")
+    println(s"=== DIFF ($f1 - $f1) ===")
     val diff = eval1.diff(eval2)
     println(diff.toString)
 
