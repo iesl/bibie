@@ -9,35 +9,52 @@ import java.io._
 import java.util.StringTokenizer
 import scala.io.Source
 
+// NOTE: these require Java 8
+import java.time.format.DateTimeFormatter
+import java.time.LocalDateTime
+
 /**
  * Created by kate on 5/14/15.
  */
 
 /**
- * TODO remove <other> field from evals / output
- * TODO instance-level evaluation
  * TODO verify ELGEval == GROBID Eval
  */
 
 /** Close to verbatim copy of GROBID evaluation (in grobid-trainer, EvaluationUtilities.evaluateStandard) **/
-class ExactlyLikeGrobidEvaluator {
+class ExactlyLikeGrobidEvaluator(root: String = System.getenv("BIBROOT")) {
   def fmt2(d: Double): String = "%.2f".format(d)
-
-  def evaluate(docs: Seq[Document], filename: String): String = {
-    writeFile(docs, filename)
-    evaluate(filename)
+  def getFileId: String = {
+    val date = LocalDateTime.now()
+    val format = DateTimeFormatter.ofPattern("mmHHddMM")
+    date.format(format)
   }
 
-  def evaluate(filename: String): String = {
+  def evaluate(docs: Seq[Document], filename: String, writeFiles: Boolean = false, outputDir: String = "results"): (Double, String) = {
+    writeFile(docs, filename)
+    evaluate(filename, writeFiles=writeFiles, outputDir=outputDir)
+  }
+
+  def evaluate(filename: String, writeFiles: Boolean, outputDir: String): (Double, String) = {
     val report = new StringBuilder()
     val theResult = loadFile(filename)
-    report.append(evaluateTokenLevel(theResult))
-    report.append(evaluateFieldLevel(theResult))
-    report.append(evaluateInstanceLevel(theResult))
-    report.toString()
+    val tokenLvl = evaluateTokenLevel(theResult)
+    report.append(tokenLvl)
+    val (f0, fieldLvl) = evaluateFieldLevel(theResult)
+    report.append(fieldLvl)
+    val instanceLvl = evaluateInstanceLevel(theResult)
+    report.append(instanceLvl)
+    // write each evaluation to separate files (for convenience/organization)
+    if (writeFiles) {
+      println("writing evaluations to disk...")
+      writeReportsToFiles(outputDir, report.toString(), tokenLvl.toString, fieldLvl.toString, instanceLvl.toString)
+      println("done.")
+    }
+    (f0, report.toString())
   }
 
-  def evaluateFieldLevel(theResult: String): String = {
+
+  def evaluateFieldLevel(theResult: String): (Double, String) = {
     val report = new StringBuilder()
     val labels = new ArrayBuffer[String]()
     val counterObserved = new ArrayBuffer[Int]()
@@ -194,9 +211,9 @@ class ExactlyLikeGrobidEvaluator {
     }
 
     report.append("\n===== Field-level results =====\n")
-    val fieldLevelMetrics = computeMetrics(labels.toList, counterObserved.toList, counterExpected.toList, counterFP.toList, counterFN.toList)
+    val (f0, fieldLevelMetrics) = computeMetrics(labels.toList, counterObserved.toList, counterExpected.toList, counterFP.toList, counterFN.toList)
     report.append(fieldLevelMetrics)
-    report.toString()
+    (f0, report.toString())
   }
 
   def evaluateTokenLevel(theResult: String): String = {
@@ -326,7 +343,7 @@ class ExactlyLikeGrobidEvaluator {
                      counterObserved: List[Int],
                      counterExpected: List[Int],
                      counterFP: List[Int],
-                     counterFN: List[Int]): String = {
+                     counterFN: List[Int]): (Double, String) = {
 
     val report = new StringBuilder()
     report.append("\nlabel\t\taccuracy\tprecision\trecall\t\tf1\n\n")
@@ -362,7 +379,7 @@ class ExactlyLikeGrobidEvaluator {
     i = 0
     while (i < labels.size) {
       val label = labels(i).trim
-      if (label.equals("<other>") || label.equals("base")) {
+      if (label.equals("<other>") || label.equals("other") || label.equals("base")) {
         i += 1
         //continue
       } else {
@@ -474,8 +491,7 @@ class ExactlyLikeGrobidEvaluator {
 
     //		report.append("\t(macro average)")
     report.append("\n")
-
-    report.toString()
+    (f0, report.toString())
   }
 
   /**
@@ -485,6 +501,10 @@ class ExactlyLikeGrobidEvaluator {
    *
    * where each line corresponds to a token. [filename] should contain all documents. Documents should be separated by
    * newlines.
+   *
+   * Note that this whole setup (and the resulting extraneous I/O operations) are here to maintain as much
+   * equivalence as possible with GROBID (I wanted to basically copy/paste all that code here), and should be refactored
+   * out at some point.
    */
   def loadFile(filename: String): String = {
     var lineCount = 0
@@ -512,7 +532,7 @@ class ExactlyLikeGrobidEvaluator {
       if (c.startsWith("B-")) "I-" + c.substring(2)
       else if (c.startsWith("I-")) c.substring(2)
       else c
-    println(s"writing output to: $filename ...")
+//    println(s"writing output to: $filename ...")
     val pw = new PrintWriter(new File(filename))
     docs.foreach { doc =>
       doc.tokens.foreach { token =>
@@ -531,6 +551,33 @@ class ExactlyLikeGrobidEvaluator {
     }
     pw.close()
   }
+
+
+  def writeReportsToFiles(dir: String, report: String, tokenLvl: String, fieldLvl: String, instanceLvl: String): Unit = {
+    def writeThingTo(thing: String, fname: String): Unit = {
+      println(s"writing: $fname")
+      val pw = new PrintWriter(new File(fname))
+      pw.write(thing)
+      pw.close()
+    }
+    if (!(new File(dir).exists)) {
+      import scala.sys.process._
+      val cmd = s"mkdir $dir"
+      println(cmd)
+      assert(cmd.! == 0, s"failed to mkdir $dir")
+    }
+    val baseFilename = s"$dir/$getFileId.results"
+    println(s"writing full report to: $baseFilename")
+    val pw = new PrintWriter(new File(baseFilename))
+    pw.write(report.toString())
+    pw.close()
+    val tokenLvlFname = s"$baseFilename.token"
+    val fieldLvlFname = s"$baseFilename.field"
+    val instLvlFname = s"$baseFilename.instance"
+    writeThingTo(tokenLvl, tokenLvlFname)
+    writeThingTo(fieldLvl, fieldLvlFname)
+    writeThingTo(instanceLvl, instLvlFname)
+  }
 }
 
 /** Data structure for comparison/analysis of evaluations produced by GROBID and ExactlyLikeGrobidEvaluator **/
@@ -543,7 +590,7 @@ class EvalLine(val label: String, val accuracy: Double, val precision: Double, v
   override def toString: String = s"$label\t\t$accuracy\t\t$precision\t\t$recall\t\t$f0"
 }
 object EvalLine {
-  val whitespace = "(\\s\\s)+".r
+  val whitespace = "((\\s\\s)+)|(\t+)".r
   def apply(s: String): EvalLine = {
     val parts = whitespace.split(s).filter(_.length > 0)
     assert(parts.length >= 5, s"bad line? $s --> [${parts.mkString(",")}] (${parts.length})")

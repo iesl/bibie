@@ -29,6 +29,7 @@ oka oka o ok oka oka a ka oka oka LINEIN NOCAPS NODIGIT 0 1 0 0 0 0 0 0 0 0 0 0 
  */
 
 class GoldCitationLabel(val label: String, val token: Token)
+class PreFeatures(val features: Array[String], val token: Token)
 
 object LoadGrobid {
   def fromFilename(filename: String): Seq[Document] = {
@@ -56,8 +57,9 @@ object LoadGrobid {
         val string = parts.head
         val features = parts.dropRight(1)
         val token = new Token(currSent, string)
-        token.attr += new CitationFeatures(token)
-        token.attr[CitationFeatures] ++= features
+        token.attr += new PreFeatures(features, token) //put in PreFeatures so we can freeze CitationFeaturesDomain after loading training / before loading dev
+        //token.attr += new CitationFeatures(token)
+        //token.attr[CitationFeatures] ++= features
         token.attr += new CitationLabel(if (!LabelDomain.frozen || LabelDomain.categories.contains(label)) label else "O", token)
         tokenCount += 1
       } else {
