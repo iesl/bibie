@@ -1,14 +1,9 @@
 package edu.umass.cs.iesl.bibie
 
-import cc.factorie.variable.{CategoricalDomain, LabeledMutableCategoricalVar}
 import cc.factorie.app.nlp._
-
-import scala.collection.mutable.{HashSet, HashMap, ArrayBuffer}
-import scala.util.matching.Regex
+import scala.collection.mutable.ArrayBuffer
 import java.io._
 import java.util.StringTokenizer
-import scala.io.Source
-
 // NOTE: these require Java 8
 import java.time.format.DateTimeFormatter
 import java.time.LocalDateTime
@@ -17,18 +12,9 @@ import java.time.LocalDateTime
  * Created by kate on 5/14/15.
  */
 
-/**
- * TODO verify ELGEval == GROBID Eval
- */
-
 /** Close to verbatim copy of GROBID evaluation (in grobid-trainer, EvaluationUtilities.evaluateStandard) **/
 class ExactlyLikeGrobidEvaluator(root: String = System.getenv("BIBROOT")) {
   def fmt2(d: Double): String = "%.2f".format(d)
-  def getFileId: String = {
-    val date = LocalDateTime.now()
-    val format = DateTimeFormatter.ofPattern("mmHHddMM")
-    date.format(format)
-  }
 
   def evaluate(docs: Seq[Document], filename: String, writeFiles: Boolean = false, outputDir: String = "results"): (Double, String) = {
     writeFile(docs, filename)
@@ -39,8 +25,10 @@ class ExactlyLikeGrobidEvaluator(root: String = System.getenv("BIBROOT")) {
     val report = new StringBuilder()
     val theResult = loadFile(filename)
     val tokenLvl = evaluateTokenLevel(theResult)
+    report.append("\n===== Token-level results =====\n\n")
     report.append(tokenLvl)
     val (f0, fieldLvl) = evaluateFieldLevel(theResult)
+    report.append("\n===== Field-level results =====\n")
     report.append(fieldLvl)
     val instanceLvl = evaluateInstanceLevel(theResult)
     report.append(instanceLvl)
@@ -210,7 +198,7 @@ class ExactlyLikeGrobidEvaluator(root: String = System.getenv("BIBROOT")) {
       }
     }
 
-    report.append("\n===== Field-level results =====\n")
+//    report.append("\n===== Field-level results =====\n")
     val (f0, fieldLevelMetrics) = computeMetrics(labels.toList, counterObserved.toList, counterExpected.toList, counterFP.toList, counterFN.toList)
     report.append(fieldLevelMetrics)
     (f0, report.toString())
@@ -295,8 +283,8 @@ class ExactlyLikeGrobidEvaluator(root: String = System.getenv("BIBROOT")) {
       }
     } // while (stt.hasMoreTokens)
 
-    report.append("\n===== Token-level results =====\n\n")
-    val tokenLevelMetrics = computeMetrics(labels.toList, counterObserved.toList, counterExpected.toList, counterFP.toList, counterFN.toList)
+//    report.append("\n===== Token-level results =====\n\n")
+    val (_, tokenLevelMetrics) = computeMetrics(labels.toList, counterObserved.toList, counterExpected.toList, counterFP.toList, counterFN.toList)
     report.append(tokenLevelMetrics)
     report.toString()
   }
@@ -552,8 +540,15 @@ class ExactlyLikeGrobidEvaluator(root: String = System.getenv("BIBROOT")) {
     pw.close()
   }
 
-
+  /**
+   * Write the various evaluations to separate files.
+   */
   def writeReportsToFiles(dir: String, report: String, tokenLvl: String, fieldLvl: String, instanceLvl: String): Unit = {
+    def getFileId: String = {
+      val date = LocalDateTime.now()
+      val format = DateTimeFormatter.ofPattern("mmHHddMM")
+      date.format(format)
+    }
     def writeThingTo(thing: String, fname: String): Unit = {
       println(s"writing: $fname")
       val pw = new PrintWriter(new File(fname))
@@ -580,7 +575,7 @@ class ExactlyLikeGrobidEvaluator(root: String = System.getenv("BIBROOT")) {
   }
 }
 
-/** Data structure for comparison/analysis of evaluations produced by GROBID and ExactlyLikeGrobidEvaluator **/
+/** Data structure for comparison/analysis of evaluations produced by GROBID and/or ExactlyLikeGrobidEvaluator **/
 class EvalLine(val label: String, val accuracy: Double, val precision: Double, val recall: Double, val f0: Double) {
   def equals(other: EvalLine): Boolean = label == other.label && accuracy == other.accuracy && precision == other.precision && recall == other.recall && f0 == other.f0
   def diff(other: EvalLine): EvalLine = {
@@ -600,7 +595,8 @@ object EvalLine {
     new EvalLine(labelNorm, accuracy.toDouble, precision.toDouble, recall.toDouble, f0.toDouble)
   }
 }
-/** Data structure for comparison/analysis of evaluations produced by GROBID and ExactlyLikeGrobidEvaluator **/
+
+/** Data structure for comparison/analysis of evaluations produced by GROBID and/or ExactlyLikeGrobidEvaluator **/
 class Eval(val lines: Seq[EvalLine]) {
   def equals(other: Eval): Boolean =
     (lines.length == other.lines.length) &&
@@ -615,7 +611,6 @@ class Eval(val lines: Seq[EvalLine]) {
   def labels: Set[String] = lines.map(_.label).toSet
   override def toString: String = lines.map(_.toString).mkString("\n")
 }
-
 object Eval {
   def apply(filename: String): Eval = {
     println(s"loading Eval from $filename ...")
@@ -628,31 +623,49 @@ object Eval {
 /** Compare two Eval's **/
 object Comparison {
   def main(args: Array[String]): Unit = {
-//    println(args)
-
     val f1 = args(0)
     val f2 = args(1)
-
     val eval1 = Eval(args(0))
     val eval2 = Eval(args(1))
     println(eval1.equals(eval2))
-
-//    println(s"$f1: labels = ${eval1.labels.mkString(", ")}")
-//    println(s"$f2: labels = ${eval2.labels.mkString(", ")}")
-
     println(s"=== $f1 (eval1) ===")
     println(eval1.toString)
     println("")
-
     println(s"=== $f2 (eval2) ===")
     println(eval2.toString)
     println("")
-
-    println(s"=== DIFF ($f1 - $f1) ===")
+    println(s"=== DIFF ($f1 - $f2) ===")
     val diff = eval1.diff(eval2)
     println(diff.toString)
+  }
+}
 
-
+/**
+ * Verify that the output of ExactlyLikeGrobidEvaluator is completely equivalent to GROBID's evaluation output.
+ */
+object EvaluationTester {
+  def main(args: Array[String]): Unit = {
+    assert(args.length == 3, s"args: labeled-file grobid-token-lvl grobid-field-lvl")
+    // path to file generated by GROBID in EvaluationUtilities.standardEvaluation (writing "theResult" to disk)
+    // file is of the (tab-separated) format:
+    // feature0 feature1  ... feature_d gold_label  predicted_label
+    val labeledFile = args(0)
+    // path to GROBID evaluation output (token-level, field-level), which was carried out
+    // on labeledFile (above).
+    val grobidTokenEval = args(1)
+    val grobidFieldEval = args(2)
+    val docs = LoadGrobid.fromFilenameLabeled(labeledFile)
+    val rootDir = System.getenv("BIBROOT")
+    val evaluator = new ExactlyLikeGrobidEvaluator(rootDir)
+    val tmpFile = s"$rootDir/evaluationTester.tmp"
+    val outputDir = s"$rootDir/comparison"
+    val (f0, eval) = evaluator.evaluate(docs, tmpFile, writeFiles=true, outputDir=outputDir)
+    val evalFiles = new File(outputDir).listFiles.map(_.getAbsolutePath)
+    val tokenLvl = evalFiles.filter(_.endsWith(".token"))
+    val fieldLvl = evalFiles.filter(_.endsWith(".field"))
+    // these should print all 0's (or near 0's, due to rounding)
+    Comparison.main(tokenLvl)
+    Comparison.main(fieldLvl)
   }
 }
 

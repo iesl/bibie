@@ -4,10 +4,9 @@ import java.io._
 import java.net.URL
 
 import cc.factorie._
-import cc.factorie.app.chain.SegmentEvaluation
 import cc.factorie.app.nlp.{TokenSpan, Document, Token}
 import cc.factorie.app.strings._
-import cc.factorie.la.{DenseTensor2, Tensor2}
+import cc.factorie.la.DenseTensor2
 import cc.factorie.model.DotTemplateWithStatistics2
 import cc.factorie.optimize.{L2Regularization, LBFGS, LikelihoodExample, ThreadLocalBatchTrainer, AdaGradRDA, Trainer}
 import cc.factorie.util._
@@ -23,8 +22,6 @@ class CitationLabel(labelname: String, val token: Token) extends CLabel(labelnam
   def hasPrev = token.hasPrev && token.prev != null
   def next = token.next
   def prev = token.prev
-
-
 }
 
 object CitationFeaturesDomain extends CategoricalVectorDomain[String]
@@ -504,6 +501,8 @@ class Hyperparams(opts: TrainCitationModelOptions) {
   val optimizer = opts.optimizer.value
   val rate = opts.rate.value
   val delta = opts.delta.value
+  val l1 = opts.l1.value
+  val l2 = opts.l2.value
   val root = opts.rootDir.value //not a hyperparameter but used for misc stuff
 }
 
@@ -524,8 +523,10 @@ class TrainCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with 
   val rootDir = new CmdOption("root-dir", "", "STRING", "path to root directory of project (used for various required IO operations)")
   /* hyperparameters */
   val optimizer = new CmdOption("optimizer", "lbfgs", "STRING", "lbfgs|adagrad")
-  val rate = new CmdOption("adagrad-rate", 1.0, "FLOAT", "Adagrad learning rate.")
-  val delta = new CmdOption("adagrad-delta", 0.1, "FLOAT", "Adagrad delta (ridge).")
+  val rate = new CmdOption("adagrad-rate", 0.35548827391837345, "FLOAT", "Adagrad learning rate.")
+  val delta = new CmdOption("adagrad-delta", 1.9033917145173614E-6, "FLOAT", "Adagrad delta (ridge).")
+  val l1 = new CmdOption("l1", 0.1, "FLOAT", "l1 regularizer strength")
+  val l2 = new CmdOption("l2", 0.1, "FLOAT", "l2 regularizer strength")
 }
 
 class TestCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with cc.factorie.app.nlp.SharedNLPCmdOptions {
@@ -534,165 +535,6 @@ class TestCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with c
   val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "URL prefix for lexicon files/prefixes named cities, companies, companysuffix, countries, days, firstname.high, ...")
 }
 
-class GrobidCitationCRFTrainer {
-  val evaluator = new SegmentationEvaluation[CitationLabel](LabelDomain)
-  val evaluator2 = new ExactlyLikeGrobidEvaluator
-  val model = new CitationCRFModel
-  def process(document: Document): Document = {
-    if (document.tokens.size == 0) return document
-    for (sentence <- document.sentences if sentence.tokens.size > 0) {
-      val vars = sentence.tokens.map(_.attr[CitationLabel]).toSeq
-      val sum = CitationBIOHelper.infer(vars, model)
-      sum.setToMaximize(null)
-    }
-    document
-  }
-  def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams): Unit = {
-    implicit val random = new scala.util.Random
-    // make "tmp" directory in root project folder ; needed for evaluations
-    val tmpDir = params.root + "/tmp"
-    if (!(new java.io.File(tmpDir).exists)) {
-      import scala.sys.process._
-      assert(s"mkdir $tmpDir".! == 0, s"could not mkdir $tmpDir")
-    }
-    // Get the variables to be inferred (for now, just operate on a subset)
-    val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]).toSeq
-    val testLabels: Seq[CitationLabel] = testDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]).toSeq
-    (trainLabels ++ testLabels).filter(_ != null).foreach(_.setRandomly(random))
-    val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])
-    val examples = vars.map(v => new LikelihoodExample(v.toSeq, model, cc.factorie.infer.InferByBPChain))
-    def evaluate(): Unit = {
-      val tmpFile = tmpDir + "/" + scala.util.Random.nextInt(10000) + ".tmp"
-      trainDocuments.foreach(process)
-      val (trainF1, _) = evaluator2.evaluate(trainDocuments, tmpFile)
-      println(s"TRAIN F1 = $trainF1")
-      testDocuments.foreach(process)
-      val (testF1, _) = evaluator2.evaluate(testDocuments, tmpFile)
-      println(s"DEV F1 = $testF1")
-    }
-    params.optimizer match {
-      case "lbfgs" =>
-        val optimizer = new LBFGS(maxIterations=1814) with L2Regularization
-        val trainer = new ThreadLocalBatchTrainer(model.parameters, optimizer)
-        println("training with LBFGS ...")
-        trainer.trainFromExamples(examples)
-      case "adagrad" =>
-        val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, numExamples=examples.length)
-        println("training with AdaGradRDA ...")
-        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=5, optimizer=optimizer)
-      case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
-    }
-    (trainLabels ++ testLabels).foreach(_.setRandomly(random))
-    trainDocuments.foreach(process)
-    testDocuments.foreach(process)
-    evaluate()
-    evaluator.printEvaluation(testDocuments, testDocuments, "FINAL")
-  }
-
-  def serialize(stream: OutputStream) {
-    import cc.factorie.util.CubbieConversions._
-    val is = new DataOutputStream(stream)
-    BinarySerializer.serialize(LabelDomain, is)
-    BinarySerializer.serialize(CitationFeaturesDomain.dimensionDomain, is)
-    BinarySerializer.serialize(model, is)
-    is.close()
-  }
-  def deserialize(stream: InputStream): Unit = deserialize(model, stream)
-
-  def deserialize(theModel: CitationCRFModel, stream: InputStream) {
-    import cc.factorie.util.CubbieConversions._
-    val is = new DataInputStream(stream)
-    BinarySerializer.deserialize(LabelDomain, is)
-    LabelDomain.freeze()
-    println("deserialized labeldomain")
-    BinarySerializer.deserialize(CitationFeaturesDomain.dimensionDomain, is)
-    CitationFeaturesDomain.freeze()
-    println("deserialized featuresdomain")
-    BinarySerializer.deserialize(theModel, is)
-    println("deserialized model")
-    is.close()
-  }
-}
-
-object TrainCitationModelGrobid extends HyperparameterMain {
-  URLHandlerSetup.poke()
-  def initFeatures(docs: Seq[Document]): Unit = {
-    docs.flatMap(_.tokens).foreach { token =>
-      token.attr += new CitationFeatures(token)
-      token.attr[CitationFeatures] ++= token.attr[PreFeatures].features
-    }
-  }
-  def evaluateParameters(args: Array[String]): Double = {
-    println(args.mkString(", "))
-    val opts = new TrainCitationModelOptions
-    opts.parse(args)
-    val params = new Hyperparams(opts)
-    val trainer = new GrobidCitationCRFTrainer
-    val allData = LoadGrobid.fromFilename(opts.trainFile.value)
-    val trainPortion = (allData.length.toDouble * opts.trainPortion.value).floor.toInt
-    val trainingData = allData.take(trainPortion)
-    initFeatures(trainingData)
-    CitationFeaturesDomain.freeze()
-    val devData = allData.drop(trainPortion)
-    initFeatures(devData)
-    println(s"feature domain size: ${CitationFeaturesDomain.dimensionSize}")
-    println(s"training data: ${trainingData.length} docs, ${trainingData.flatMap(_.tokens).length} tokens")
-    println(s"dev data: ${devData.length} docs, ${devData.flatMap(_.tokens).length} tokens")
-    trainer.train(trainingData, devData, params)
-    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
-    val (f0, eval) = evaluator.evaluate(devData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
-    println(eval)
-    if (opts.saveModel.value) {
-      println(s"serializing model to: ${opts.modelFile.value}")
-      trainer.serialize(new FileOutputStream(opts.modelFile.value))
-    }
-    f0
-  }
-}
-
-object OptimizeCitationModelGrobid {
-  def main(args: Array[String]): Unit = {
-    println(args.mkString(", "))
-    val opts = new TrainCitationModelOptions
-    opts.parse(args)
-    opts.saveModel.setValue(false)
-    opts.writeEvals.setValue(false)
-    val rate = HyperParameter(opts.rate, new LogUniformDoubleSampler(1e-5, 10))
-    val delta = HyperParameter(opts.delta, new LogUniformDoubleSampler(1e-6, 1))
-    val qs = new QSubExecutor(8, "edu.umass.cs.iesl.bibie.TrainCitationModelGrobid")
-    val optimizer = new HyperParameterSearcher(opts, Seq(rate, delta), qs.execute, 100, 90, 60)
-    val result = optimizer.optimize()
-    println("Got results: " + result.mkString(" "))
-    println("Best rate: " + opts.rate.value + " best delta: " + opts.delta.value)
-    println("Running best configuration...")
-    opts.saveModel.setValue(true)
-    opts.writeEvals.setValue(true)
-    import scala.concurrent.duration._
-    import scala.concurrent.Await
-    Await.result(qs.execute(opts.values.flatMap(_.unParse).toArray), 1.hours)
-    println("Done.")
-  }
-}
-
-object TestCitationModelGrobid {
-  URLHandlerSetup.poke()
-  def main(args: Array[String]): Unit = {
-    val opts = new TrainCitationModelOptions
-    opts.parse(args)
-    println(s"deserializing model from: ${opts.modelFile.value}")
-    val trainer = new GrobidCitationCRFTrainer
-    trainer.deserialize(new URL(opts.modelFile.value).openStream())
-    CitationFeaturesDomain.freeze()
-    println(s"loading file: ${opts.testFile.value}")
-    val data = LoadGrobid.fromFilename(opts.testFile.value)
-    println("processing docs")
-    data.foreach(trainer.process)
-    println("evaluating")
-    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
-    println(evaluator.evaluate(data, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value))
-    println("done.")
-  }
-}
 
 
 
