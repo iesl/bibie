@@ -38,6 +38,7 @@ oka oka o ok oka oka a ka oka oka LINEIN NOCAPS NODIGIT 0 1 0 0 0 0 0 0 0 0 0 0 
 
 object LoadGrobid {
   def fromFilename(filename: String, withFeatures: Boolean = true): Seq[Document] = {
+    println(s"Loading data from $filename ...")
     val whitespace = "\\s+".r
     val buff = new ArrayBuffer[Document]()
     var currDoc = new Document("")

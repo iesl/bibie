@@ -213,7 +213,11 @@ class CitationCRFTrainer {
     (trainLabels ++ testLabels).filter(_ != null).foreach(_.setRandomly(random))
     val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])
     val examples = vars.map(v => new LikelihoodExample(v.toSeq, model, cc.factorie.infer.InferByBPChain))
-    def evaluate(): Unit = evaluator.printEvaluation(testDocuments, testDocuments, "TRAINING")
+    def evaluate(): Unit = {
+      trainDocuments.foreach(process)
+      testDocuments.foreach(process)
+      evaluator.printEvaluation(trainDocuments, testDocuments, "TRAINING")
+    }
     params.optimizer match {
       case "lbfgs" =>
         val optimizer = new LBFGS with L2Regularization
@@ -229,6 +233,10 @@ class CitationCRFTrainer {
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
     trainDocuments.foreach(process)
     testDocuments.foreach(process)
+    val tot = model.parameters.tensors.sumInts(t => t.toSeq.count(x => x == 0)).toFloat
+    val len = model.parameters.tensors.sumInts(_.length)
+    val sparsity = tot / len
+    println(s"model sparsity: ${sparsity}")
     evaluator.printEvaluation(testDocuments, testDocuments, "FINAL")
   }
 
@@ -377,6 +385,9 @@ object TrainCitationModel extends HyperparameterMain {
     val params = new Hyperparams(opts)
     val trainer = new CitationCRFTrainer
     val trainingData = LoadHier.fromFile(opts.trainFile.value)
+    println("before:")
+    trainingData.head.tokens.take(10).foreach(t => println(s"${t.string} ${t.attr[CitationLabel].categoryValue}"))
+    CitationCRFTrainer.printDocument(trainingData.head)
     val testingData = if (opts.testFile.value.isEmpty) Seq() else LoadHier.fromFile(opts.testFile.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
@@ -395,6 +406,9 @@ object TrainCitationModel extends HyperparameterMain {
     val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
     val (f0, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
     println(eval)
+    println("\nafter:")
+    trainingData.head.tokens.take(10).foreach(t => println(s"${t.string} ${t.attr[CitationLabel].categoryValue}"))
+    CitationCRFTrainer.printDocument(trainingData.head)
     f0
   }
 
@@ -410,6 +424,12 @@ object TrainCitationModel extends HyperparameterMain {
     val allData = LoadGrobid.fromFilename(opts.trainFile.value, withFeatures=opts.useGrobidFeatures.value)
     val trainPortion = (allData.length.toDouble * opts.trainPortion.value).floor.toInt
     val trainingData = allData.take(trainPortion)
+    //TODO print (train, dev) sizes
+    //TODO feature domain trimBelowCount?
+    
+//    println("before:")
+//    trainingData.head.tokens.take(10).foreach(t => println(s"${t.string} ${t.attr[CitationLabel].categoryValue}"))
+//    CitationCRFTrainer.printDocument(trainingData.head)
     val testingData = allData.drop(trainPortion)
     if (opts.useGrobidFeatures.value) {
       initGrobidFeatures(trainingData)
@@ -417,7 +437,7 @@ object TrainCitationModel extends HyperparameterMain {
       initGrobidFeatures(testingData)
     } else {
       val lexiconDir = opts.lexiconUrl.value
-      OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir) //TODO don't think we need this here?
+      OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir) //TODO don't think we need this here? -ks
       println("Training: " + trainingData.size + " Testing: " + testingData.size)
       val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
         "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
@@ -429,11 +449,15 @@ object TrainCitationModel extends HyperparameterMain {
       for (d <- testingData) d.tokens.foreach(trainer.wordToFeatures)
       trainer.initSentenceFeatures(testingData)
     }
+    println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
     trainer.train(trainingData, testingData, params)
     if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
     val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
     val (f0, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
     println(eval)
+//    println("\nafter:")
+//    trainingData.head.tokens.take(10).foreach(t => println(s"${t.string} ${t.attr[CitationLabel].categoryValue}"))
+//    CitationCRFTrainer.printDocument(trainingData.head)
     f0
   }
 }
@@ -473,34 +497,76 @@ object TestCitationModel {
   }
 
   def processGrobid(opts: TrainCitationModelOptions): Unit = {
-    val testingData = LoadGrobid.fromFilename(opts.trainFile.value, withFeatures=opts.useGrobidFeatures.value)
-    println("before:")
-    CitationCRFTrainer.printDocument(testingData.head)
+    val testingData = LoadGrobid.fromFilename(opts.testFile.value, withFeatures=opts.useGrobidFeatures.value)
+//    println("before:")
+//    CitationCRFTrainer.printDocument(testingData.head)
     val trainer = new CitationCRFTrainer
     trainer.deserialize(new URL(opts.modelFile.value).openStream())
     if (opts.useGrobidFeatures.value) {
-      val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
-        "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
-        "journal.lst", "names.lst", "publishers.lst")
-      trainer.lexicons = new Lexicons(opts.lexiconUrl.value, lexes)
-      OverSegmenter.overSegment(testingData, trainer.lexicons.urlPrefix) //TODO don't think we need this here?
-      for (d <- testingData) d.tokens.foreach(trainer.wordToFeatures)
-      trainer.initSentenceFeatures(testingData)
-    } else {
       testingData.flatMap(_.tokens).foreach { token =>
         token.attr += new CitationFeatures(token)
         token.attr[CitationFeatures] ++= token.attr[PreFeatures].features
       }
+    } else {
+      val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
+        "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
+        "journal.lst", "names.lst", "publishers.lst")
+      trainer.lexicons = new Lexicons(opts.lexiconUrl.value, lexes)
+      OverSegmenter.overSegment(testingData, trainer.lexicons.urlPrefix) //TODO don't think we need this here? -ks
+      for (d <- testingData) d.tokens.foreach(trainer.wordToFeatures)
+      trainer.initSentenceFeatures(testingData)
     }
-    testingData.foreach(trainer.process)
+    println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
+    val tot = trainer.model.parameters.tensors.sumInts(t => t.toSeq.count(x => x == 0)).toFloat
+    val len = trainer.model.parameters.tensors.sumInts(_.length)
+    val sparsity = tot / len
+    println(s"model sparsity: $sparsity")
+    import scala.collection.mutable.HashMap
+    case class EvalThing(label: String) {
+      var tp = 0; var fp = 0; var tn = 0; var fn = 0; var expected = 0
+      def precision: Double = if (tp + fp == 0) 0.0 else 1.0 * tp / (tp + fp)
+      def recall: Double = if (tp + fn == 0) 0.0 else 1.0 * tp / (tp + fn)
+      def f1: Double = {
+        val p = precision; val r = recall
+        if (p + r == 0.0) 0.0 else (2.0 * p * r) / (p + r)
+      }
+      override def toString: String = s"$label f1=$f1 tp=$tp fp=$fp fn=$fn expected=$expected"
+
+    }
+    val table = new HashMap[String, EvalThing]()
+    def baseLabel(s: String): String = if (s != "O") s.substring(2) else "O"
+    testingData.foreach { doc =>
+      trainer.process(doc)
+      doc.tokens.foreach { t =>
+        val guess = baseLabel(t.attr[CitationLabel].categoryValue)
+        val gold = baseLabel(t.attr[CitationLabel].target.categoryValue)
+        if (!table.contains(guess)) table(guess) = new EvalThing(guess)
+        if (!table.contains(gold)) table(gold) = new EvalThing(gold)
+        if (guess == gold) {
+          table(gold).tp += 1
+        } else {
+          table(gold).fn += 1
+          table(guess).fp += 1
+        }
+        table(gold).expected += 1
+      }
+    }
+    println("=== MY EVALUATION ===")
+    table.foreach { case (label, eval) => println(eval.toString) }
+    println("")
     trainer.evaluator.printEvaluation(testingData, testingData, "FINAL")
+    println("")
     val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
     val (_, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
     println(eval)
-    println("after:")
-    CitationCRFTrainer.printDocument(testingData.head)
+//    println("after:")
+//    CitationCRFTrainer.printDocument(testingData.head)
   }
 }
+
+//feature domain size: 50447
+//model sparsity: 0.0
+
 
 object OptimizeCitationModel {
   def main(args: Array[String]): Unit = {
