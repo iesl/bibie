@@ -16,7 +16,7 @@ else
     memSize="10G"
     CP="$BIBROOT/target/bibie-0.1-SNAPSHOT-jar-with-dependencies.jar"
 
-    java -Xmx${memSize} -cp $CP edu.umass.cs.iesl.bibie.TrainCitationModel \
+    java -Xmx${memSize} -cp $CP edu.umass.cs.iesl.bibie.OptimizeCitationModel \
     --root-dir=$BIBROOT \
     --optimizer=$optimizer \
     --save-model=$saveModel \

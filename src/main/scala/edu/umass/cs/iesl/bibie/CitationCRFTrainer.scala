@@ -13,9 +13,7 @@ import cc.factorie.util._
 import cc.factorie.variable._
 
 object LabelDomain extends CategoricalDomain[String]
-
 abstract class CLabel(labelname: String) extends LabeledCategoricalVariable(labelname)
-
 class CitationLabel(labelname: String, val token: Token) extends CLabel(labelname) {
   def domain = LabelDomain
   def hasNext = token.hasNext && token.next != null
@@ -25,14 +23,12 @@ class CitationLabel(labelname: String, val token: Token) extends CLabel(labelnam
 }
 
 object CitationFeaturesDomain extends CategoricalVectorDomain[String]
-
 class CitationFeatures(val token: Token) extends BinaryFeatureVectorVariable[String] {
   def domain = CitationFeaturesDomain
   override def skipNonCategories = true
 }
 
 object SpanLabelDomain extends CategoricalDomain[String]
-
 class SpanCitationLabel(val span: CitationSpan, initialValue: String) extends CLabel(initialValue) {
   def domain = SpanLabelDomain
 }
@@ -71,14 +67,10 @@ class CitationCRFModel extends TemplateModel with Parameters {
 
 class CitationCRFTrainer {
   val evaluator = new SegmentationEvaluation[CitationLabel](LabelDomain)
-
-  // was this an untrained model being used? we should remove -luke
-  var model = new CitationCRFModel
+  val model = new CitationCRFModel
   var lexicons: Lexicons = null
   var loc = 0
-
   // TODO: add some global features to baseline CRF - like "containsthesis"
-
   def wordToFeatures(token: Token) {
 
     val docSpans = token.document.attr[CitationSpanList].spans
@@ -147,8 +139,6 @@ class CitationCRFTrainer {
     if (lower.matches("(v\\.?|volume|vol\\.?).*")) token.attr[CitationFeatures] += "VOLUME"
     loc += 1
   }
-
-
   def count(string: String): (Int, Int) = {
     var digits = 0
     var alpha = 0
@@ -158,7 +148,6 @@ class CitationCRFTrainer {
     }
     (digits, alpha)
   }
-
   def initSentenceFeatures(data: Seq[Document]) {
     for (d <- data) {
       val docLength = d.tokens.size
@@ -201,97 +190,57 @@ class CitationCRFTrainer {
   val HasClosedSquare = ".*\\].*"
   val ContainsDigit = ".*[0-9].*".r
 
-  def tag(token: Token): String = {
-    token.attr[CitationLabel].categoryValue.substring(2)
-  }
-
+  def tag(token: Token): String = token.attr[CitationLabel].categoryValue.substring(2)
   def test(testDocuments: Seq[Document]) {
     for (d <- testDocuments) {
       d.tokens.foreach(t => wordToFeatures(t))
     }
     initSentenceFeatures(testDocuments)
-
     val testLabels: Seq[CitationLabel] = testDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]).toSeq
-
     testLabels.foreach(_.setRandomly(random))
-
     testDocuments.foreach(process)
-
     evaluator.printEvaluation(testDocuments, testDocuments, "FINAL")
     evaluator.segmentationEvaluation(testDocuments, testDocuments, "FINAL")
-
     println("Test Documents")
     testDocuments.foreach(CitationCRFTrainer.printDocument)
   }
 
-  def train(trainDocuments: Seq[Document], testDocuments: Seq[Document]): Unit = {
-    // Read in the data
-    // Add features for NER
+  def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams): Unit = {
     implicit val random = new scala.util.Random
-    println("Num TokenFeatures = " + CitationFeaturesDomain.dimensionDomain.size)
-
-//    trainDocuments.take(1).foreach(d => d.tokens.foreach(t => println(t.attr[CitationFeatures])))
-//    testDocuments.take(1).foreach(d => d.tokens.foreach(t => println(t.attr[CitationFeatures])))
-
-    trainDocuments.take(5).foreach {d =>
-      CitationCRFTrainer.printDocument(d)
-    }
-
     // Get the variables to be inferred (for now, just operate on a subset)
     val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]).toSeq
     val testLabels: Seq[CitationLabel] = testDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]).toSeq
     (trainLabels ++ testLabels).filter(_ != null).foreach(_.setRandomly(random))
-
     val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])
-
     val examples = vars.map(v => new LikelihoodExample(v.toSeq, model, cc.factorie.infer.InferByBPChain))
-    val trainer = new ThreadLocalBatchTrainer(model.parameters, new LBFGS with L2Regularization)
-    trainer.trainFromExamples(examples)
-
+    def evaluate(): Unit = evaluator.printEvaluation(testDocuments, testDocuments, "TRAINING")
+    params.optimizer match {
+      case "lbfgs" =>
+        val optimizer = new LBFGS with L2Regularization
+        val trainer = new ThreadLocalBatchTrainer(model.parameters, optimizer)
+        println("training with LBFGS ...")
+        trainer.trainFromExamples(examples)
+      case "adagrad" =>
+        val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
+        println("training with AdaGradRDA ...")
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=5, optimizer=optimizer)
+      case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
+    }
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
-
     trainDocuments.foreach(process)
     testDocuments.foreach(process)
-
-    trainDocuments.take(5).foreach {d =>
-      CitationCRFTrainer.printDocument(d)
-    }
-
-    testDocuments.take(5).foreach {d =>
-      CitationCRFTrainer.printDocument(d)
-    }
-
     evaluator.printEvaluation(testDocuments, testDocuments, "FINAL")
   }
 
-  def process(document: Document): Seq[Seq[String]] = {
-    if (document.tokens.size == 0) return null.asInstanceOf[Seq[Seq[String]]]
+  def process(document: Document): Document = {
+    if (document.tokens.size == 0) return document
     for (sentence <- document.sentences if sentence.tokens.size > 0) {
       val vars = sentence.tokens.map(_.attr[CitationLabel]).toSeq
       val sum = CitationBIOHelper.infer(vars, model)
       sum.setToMaximize(null)
     }
-    // TODO why is this here?? -luke
-    Seq[Seq[String]]()
+    document
   }
-
-
-  //  def table(documents: Iterable[Document]) {
-  //    val table = new scala.collection.mutable.HashMap[(String, String), Int]()
-  //    for (d <- documents; t <- d.tokens; if t.attr[CitationLabel].target.categoryValue.startsWith("B-")) {
-  //      val b = t.attr[CitationLabel].categoryValue.replaceAll("(I-|B-)", "")
-  //      val ta = t.attr[CitationLabel].target.categoryValue.replaceAll("(I-|B-)", "")
-  //      if (table.contains((b, ta)))
-  //        table((b, ta)) += 1
-  //      else
-  //        table((b, ta)) = 1
-  //    }
-  //    val sorted = table.toSeq.filter(a => a._1._1 != a._1._2).sortBy(-_._2).take(30)
-  //    for (s <- sorted) {
-  //      println(s._1._1 + " -> " + s._1._2 + " : " + s._2)
-  //    }
-  //
-  //  }
 
   def serialize(stream: OutputStream) {
     import cc.factorie.util.CubbieConversions._
@@ -317,18 +266,14 @@ class CitationCRFTrainer {
     println("deserialized model")
     is.close()
   }
-
 }
-
 
 object CitationCRFTrainer extends CitationCRFTrainer {
   var verbose = false
-
   def tag(label: String): String = {
     if (label == "O") "O"
     else label //.substring(2)
   }
-
   def printDocument(document: Document): Unit = {
     var current = ""
     for (token <- document.tokens; if token.attr.contains[CitationLabel]) {
@@ -416,84 +361,168 @@ object CitationCRFTrainer extends CitationCRFTrainer {
 
 // TODO: add DocumentAnnotator to add citations
 
-object TrainCitationModel {
+object TrainCitationModel extends HyperparameterMain {
   URLHandlerSetup.poke()
-  def main(args: Array[String]): Unit = {
+  def evaluateParameters(args: Array[String]): Double = {
+    println(args.mkString(", "))
     val opts = new TrainCitationModelOptions
     opts.parse(args)
+    opts.dataSet.value match {
+      case "grobid" => trainGrobid(opts)
+      case _ => trainDefault(opts)
+    }
+  }
+
+  def trainDefault(opts: TrainCitationModelOptions): Double = {
+    val params = new Hyperparams(opts)
     val trainer = new CitationCRFTrainer
-    val trainingData = LoadHier.fromFile(opts.trainFile.value).take(5)
-    val testingData = if (opts.testFile.value.isEmpty) Seq() else LoadHier.fromFile(opts.testFile.value).take(2)
-
-    trainingData.head.tokens.foreach { t => println(s"${t.string}\t${t.attr[CitationLabel]}")}
-
+    val trainingData = LoadHier.fromFile(opts.trainFile.value)
+    val testingData = if (opts.testFile.value.isEmpty) Seq() else LoadHier.fromFile(opts.testFile.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir)
-
     println("Training: " + trainingData.size + " Testing: " + testingData.size)
     val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
       "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
       "journal.lst", "names.lst", "publishers.lst")
     trainer.lexicons = new Lexicons(lexiconDir, lexes)
-    for (d <- trainingData)
-      d.tokens.foreach(trainer.wordToFeatures)
+    for (d <- trainingData) d.tokens.foreach(trainer.wordToFeatures)
     trainer.initSentenceFeatures(trainingData)
     CitationFeaturesDomain.freeze()
-    for (d <- testingData)
-      d.tokens.foreach(trainer.wordToFeatures)
+    for (d <- testingData) d.tokens.foreach(trainer.wordToFeatures)
     trainer.initSentenceFeatures(testingData)
-
-    trainer.train(trainingData, testingData)
-
-//    val labels = testingData.flatMap(_.tokens).map(_.attr[CitationLabel])
-//    println("process...")
-
-    println("== Field-Level Evaluation ==")
-    testingData.foreach(trainer.process)
-//    val fieldEval = new FieldLevelEvaluator(LabelDomain)
-//    fieldEval.evaluate(testingData)
-
-    if (opts.saveModel.value)
-      trainer.serialize(new FileOutputStream(opts.modelFile.value))
+    trainer.train(trainingData, testingData, params)
+    if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
+    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
+    val (f0, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
+    println(eval)
+    f0
   }
-}
 
-object URLHandlerSetup {
-  System.setProperty("java.protocol.handler.pkgs", "bibie.protocols")
-  // make sure this gets instantiated
-  def poke(): Unit = {
-    println("attaching resource url handler.")
+  def trainGrobid(opts: TrainCitationModelOptions): Double = {
+    def initGrobidFeatures(docs: Seq[Document]): Unit = {
+      docs.flatMap(_.tokens).foreach { token =>
+        token.attr += new CitationFeatures(token)
+        token.attr[CitationFeatures] ++= token.attr[PreFeatures].features
+      }
+    }
+    val params = new Hyperparams(opts)
+    val trainer = new CitationCRFTrainer
+    val allData = LoadGrobid.fromFilename(opts.trainFile.value, withFeatures=opts.useGrobidFeatures.value)
+    val trainPortion = (allData.length.toDouble * opts.trainPortion.value).floor.toInt
+    val trainingData = allData.take(trainPortion)
+    val testingData = allData.drop(trainPortion)
+    if (opts.useGrobidFeatures.value) {
+      initGrobidFeatures(trainingData)
+      CitationFeaturesDomain.freeze()
+      initGrobidFeatures(testingData)
+    } else {
+      val lexiconDir = opts.lexiconUrl.value
+      OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir) //TODO don't think we need this here?
+      println("Training: " + trainingData.size + " Testing: " + testingData.size)
+      val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
+        "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
+        "journal.lst", "names.lst", "publishers.lst")
+      trainer.lexicons = new Lexicons(lexiconDir, lexes)
+      for (d <- trainingData) d.tokens.foreach(trainer.wordToFeatures)
+      trainer.initSentenceFeatures(trainingData)
+      CitationFeaturesDomain.freeze()
+      for (d <- testingData) d.tokens.foreach(trainer.wordToFeatures)
+      trainer.initSentenceFeatures(testingData)
+    }
+    trainer.train(trainingData, testingData, params)
+    if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
+    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
+    val (f0, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
+    println(eval)
+    f0
   }
 }
 
 object TestCitationModel {
   URLHandlerSetup.poke()
-  def loadModel(modelUrl: String, lexiconUrlPrefix: String = "classpath:lexicons"): CitationCRFTrainer = {
-    val trainer = new CitationCRFTrainer
-    trainer.deserialize(new URL(modelUrl).openStream())
-    val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
-      "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
-      "journal.lst", "names.lst", "publishers.lst")
-    trainer.lexicons = new Lexicons(lexiconUrlPrefix, lexes)
-    trainer
-  }
-  def process(docs: Seq[Document], model: CitationCRFTrainer, print: Boolean = true): Unit = {
-    OverSegmenter.overSegment(docs, model.lexicons.urlPrefix)
-    for (d <- docs)
-      d.tokens.foreach(model.wordToFeatures)
-    model.initSentenceFeatures(docs)
-    docs.foreach(model.process)
-    if (print)
-      model.evaluator.printEvaluation(docs, docs, "FINAL")
-  }
   def main(args: Array[String]): Unit = {
-    val opts = new TestCitationModelOptions
+    println(args.mkString(", "))
+    val opts = new TrainCitationModelOptions
     opts.parse(args)
+    opts.dataSet.value match {
+      case "grobid" => processGrobid(opts)
+      case _ => processDefault(opts)
+    }
+  }
 
-    val model = loadModel(opts.modelUrl.value, opts.lexiconUrl.value)
+  def processDefault(opts: TrainCitationModelOptions): Unit = {
+    def process(docs: Seq[Document], model: CitationCRFTrainer, print: Boolean = true): Unit = {
+      OverSegmenter.overSegment(docs, model.lexicons.urlPrefix)
+      for (d <- docs) d.tokens.foreach(model.wordToFeatures)
+      model.initSentenceFeatures(docs)
+      docs.foreach(model.process)
+      if (print) model.evaluator.printEvaluation(docs, docs, "FINAL")
+    }
+    def loadModel(modelUrl: String, lexiconUrlPrefix: String = "classpath:lexicons"): CitationCRFTrainer = {
+      val trainer = new CitationCRFTrainer
+      trainer.deserialize(new URL(modelUrl).openStream())
+      val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
+        "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
+        "journal.lst", "names.lst", "publishers.lst")
+      trainer.lexicons = new Lexicons(lexiconUrlPrefix, lexes)
+      trainer
+    }
+    val model = loadModel(opts.modelFile.value, opts.lexiconUrl.value)
     val testingData = LoadHier.fromFile(opts.testFile.value)
-
     process(testingData, model)
+  }
+
+  def processGrobid(opts: TrainCitationModelOptions): Unit = {
+    val testingData = LoadGrobid.fromFilename(opts.trainFile.value, withFeatures=opts.useGrobidFeatures.value)
+    println("before:")
+    CitationCRFTrainer.printDocument(testingData.head)
+    val trainer = new CitationCRFTrainer
+    trainer.deserialize(new URL(opts.modelFile.value).openStream())
+    if (opts.useGrobidFeatures.value) {
+      val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
+        "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
+        "journal.lst", "names.lst", "publishers.lst")
+      trainer.lexicons = new Lexicons(opts.lexiconUrl.value, lexes)
+      OverSegmenter.overSegment(testingData, trainer.lexicons.urlPrefix) //TODO don't think we need this here?
+      for (d <- testingData) d.tokens.foreach(trainer.wordToFeatures)
+      trainer.initSentenceFeatures(testingData)
+    } else {
+      testingData.flatMap(_.tokens).foreach { token =>
+        token.attr += new CitationFeatures(token)
+        token.attr[CitationFeatures] ++= token.attr[PreFeatures].features
+      }
+    }
+    testingData.foreach(trainer.process)
+    trainer.evaluator.printEvaluation(testingData, testingData, "FINAL")
+    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
+    val (_, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
+    println(eval)
+    println("after:")
+    CitationCRFTrainer.printDocument(testingData.head)
+  }
+}
+
+object OptimizeCitationModel {
+  def main(args: Array[String]): Unit = {
+    println(args.mkString(", "))
+    val opts = new TrainCitationModelOptions
+    opts.parse(args)
+    opts.saveModel.setValue(false)
+    opts.writeEvals.setValue(false)
+    val l1 = HyperParameter(opts.l1, new LogUniformDoubleSampler(1e-6, 1))
+    val l2 = HyperParameter(opts.l2, new LogUniformDoubleSampler(1e-6, 1))
+    val qs = new QSubExecutor(10, "edu.umass.cs.iesl.bibie.TrainCitationModel")
+    val optimizer = new HyperParameterSearcher(opts, Seq(l1, l2), qs.execute, 200, 180, 60)
+    val result = optimizer.optimize()
+    println("Got results: " + result.mkString(" "))
+    println("Best l1: " + opts.l1.value + " best l2: " + opts.l2.value)
+    println("Running best configuration...")
+    opts.saveModel.setValue(true)
+    opts.writeEvals.setValue(true)
+    import scala.concurrent.duration._
+    import scala.concurrent.Await
+    Await.result(qs.execute(opts.values.flatMap(_.unParse).toArray), 1.hours)
+    println("Done.")
   }
 }
 
@@ -521,6 +550,8 @@ class TrainCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with 
   val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "URL prefix for lexicon files/resources named cities, companies, companysuffix, countries, days, firstname.high, ...")
   val saveModel = new CmdOption("save-model", true, "BOOLEAN", "Whether to save the model or just train/test.")
   val rootDir = new CmdOption("root-dir", "", "STRING", "path to root directory of project (used for various required IO operations)")
+  val dataSet = new CmdOption("data-set", "umass-citation", "STRING", "umass-citation|grobid")
+  val useGrobidFeatures = new CmdOption("use-grobid-features", false, "BOOLEAN", "use grobid features?")
   /* hyperparameters */
   val optimizer = new CmdOption("optimizer", "lbfgs", "STRING", "lbfgs|adagrad")
   val rate = new CmdOption("adagrad-rate", 0.35548827391837345, "FLOAT", "Adagrad learning rate.")
@@ -533,6 +564,15 @@ class TestCitationModelOptions extends cc.factorie.util.DefaultCmdOptions with c
   val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted testing file.")
   val modelUrl = new CmdOption("model-url", "file://citationCRF.factorie", "STRING", "URL for loading model.")
   val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "URL prefix for lexicon files/prefixes named cities, companies, companysuffix, countries, days, firstname.high, ...")
+}
+
+// TODO I'm not sure why we actually need this? --ks
+object URLHandlerSetup {
+  System.setProperty("java.protocol.handler.pkgs", "bibie.protocols")
+  // make sure this gets instantiated
+  def poke(): Unit = {
+    println("attaching resource url handler.")
+  }
 }
 
 
