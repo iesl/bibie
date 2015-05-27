@@ -473,24 +473,23 @@ object TestCitationModel {
       case _ => processDefault(opts)
     }
   }
-
+  def loadModel(modelUrl: String, lexiconUrlPrefix: String = "classpath:lexicons"): CitationCRFTrainer = {
+    val trainer = new CitationCRFTrainer
+    trainer.deserialize(new URL(modelUrl).openStream())
+    val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
+      "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
+      "journal.lst", "names.lst", "publishers.lst")
+    trainer.lexicons = new Lexicons(lexiconUrlPrefix, lexes)
+    trainer
+  }
+  def process(docs: Seq[Document], model: CitationCRFTrainer, print: Boolean = true): Unit = {
+    OverSegmenter.overSegment(docs, model.lexicons.urlPrefix)
+    for (d <- docs) d.tokens.foreach(model.wordToFeatures)
+    model.initSentenceFeatures(docs)
+    docs.foreach(model.process)
+    if (print) model.evaluator.printEvaluation(docs, docs, "FINAL")
+  }
   def processDefault(opts: TrainCitationModelOptions): Unit = {
-    def process(docs: Seq[Document], model: CitationCRFTrainer, print: Boolean = true): Unit = {
-      OverSegmenter.overSegment(docs, model.lexicons.urlPrefix)
-      for (d <- docs) d.tokens.foreach(model.wordToFeatures)
-      model.initSentenceFeatures(docs)
-      docs.foreach(model.process)
-      if (print) model.evaluator.printEvaluation(docs, docs, "FINAL")
-    }
-    def loadModel(modelUrl: String, lexiconUrlPrefix: String = "classpath:lexicons"): CitationCRFTrainer = {
-      val trainer = new CitationCRFTrainer
-      trainer.deserialize(new URL(modelUrl).openStream())
-      val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
-        "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
-        "journal.lst", "names.lst", "publishers.lst")
-      trainer.lexicons = new Lexicons(lexiconUrlPrefix, lexes)
-      trainer
-    }
     val model = loadModel(opts.modelFile.value, opts.lexiconUrl.value)
     val testingData = LoadHier.fromFile(opts.testFile.value)
     process(testingData, model)
@@ -559,14 +558,8 @@ object TestCitationModel {
     val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
     val (_, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
     println(eval)
-//    println("after:")
-//    CitationCRFTrainer.printDocument(testingData.head)
   }
 }
-
-//feature domain size: 50447
-//model sparsity: 0.0
-
 
 object OptimizeCitationModel {
   def main(args: Array[String]): Unit = {
