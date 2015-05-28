@@ -92,7 +92,7 @@
         </executions>
         <configuration>
           <recompileMode>incremental</recompileMode>
-          <useZincServer>true</useZincServer>
+          <useZincServer>false</useZincServer>
           <scalaVersion>${scala.majorVersion}${scala.minorVersion}</scalaVersion>
           <jvmArgs>
             <jvmArg>-Xms128m</jvmArg>
@@ -168,7 +168,7 @@
                 </executions>
                 <configuration>
                   <recompileMode>incremental</recompileMode>
-                  <useZincServer>true</useZincServer>
+                  <useZincServer>false</useZincServer>
                   <scalaVersion>${scala.majorVersion}${scala.minorVersion}</scalaVersion>
                   <jvmArgs>
                     <jvmArg>-Xms64m</jvmArg>
