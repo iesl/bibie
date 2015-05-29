@@ -6,11 +6,16 @@ else
     # "knobs"
     optimizer="adagrad"
     saveModel="true"
-    modelFile="$BIBROOT/citationCRF.factorie"
+    modelFile="$BIBROOT/grobidCitationCRF.factorie"
+    writeEvals="true"
+    outputFile="$BIBROOT/stuff.tmp"
+    outputDir="$BIBROOT/results"
+    trainPortion="0.8"
 
     # data
-    trainfile="$BIBROOT/umass-citation/training.docs"
-    testFile="$BIBROOT/umass-citation/dev.docs"
+    dataSet="grobid"
+    useGrobidFeatures="false"
+    trainfile="$BIBROOT/grobid/trainfile.data"
     lexicons="file://$BIBROOT/src/main/resources/lexicons"
 
     memSize="10G"
@@ -21,7 +26,12 @@ else
     --optimizer=$optimizer \
     --save-model=$saveModel \
     --model-file=$modelFile \
+    --write-evals=$writeEvals \
+    --output=$outputFile \
+    --output-dir=$outputDir \
+    --train-portion=$trainPortion \
+    --data-set=$dataSet \
+    --use-grobid-features=$useGrobidFeatures \
     --train-file=$trainfile \
-    --test-file=$testFile \
     --lexicons=$lexicons
 fi
