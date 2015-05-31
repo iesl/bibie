@@ -7,8 +7,9 @@
   <version>0.1-SNAPSHOT</version>
   <name>bibie</name>
   <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <scala.majorVersion>2.11</scala.majorVersion>
-    <scala.minorVersion>.1</scala.minorVersion>
+    <scala.minorVersion>.2</scala.minorVersion>
   </properties>
 
   <scm>
@@ -99,6 +100,26 @@
             <jvmArg>-Xmx2g</jvmArg>
           </jvmArgs>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>1.4</version>
+        <executions>
+          <execution>
+            <id>enforce-java</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[1.8,)</version>
+                </requireJavaVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
