@@ -9,13 +9,14 @@ import scala.reflect.ClassTag
 class SegmentationEvaluation[A <: LabeledMutableCategoricalVar[String]](labelDomain: CategoricalDomain[String])(implicit m: ClassTag[A]) {
 
   def printEvaluation(trainDocuments: Iterable[Document], testDocuments: Iterable[Document], iteration: String): Double = {
+    println("Iteration " + iteration)
     println("TRAIN")
     val trainF1 = evaluationString(trainDocuments).f1
     println("TEST")
-    val testF1 = evaluationString(testDocuments).f1
-    println("Iteration " + iteration)
-    trainF1
-//    testF1
+    if(!testDocuments.isEmpty) {
+      evaluationString(testDocuments).f1
+    }
+    else trainF1
   }
 
   def printEvaluationSingle(documents: Iterable[Document], extraText: String = ""): Double = {
