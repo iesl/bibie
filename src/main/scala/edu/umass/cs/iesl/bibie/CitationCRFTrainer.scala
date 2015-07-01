@@ -206,7 +206,7 @@ class CitationCRFTrainer {
     testDocuments.foreach(CitationCRFTrainer.printDocument)
   }
 
-  def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams): Unit = {
+  def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams): Double = {
     implicit val random = new scala.util.Random
     // Get the variables to be inferred (for now, just operate on a subset)
     val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]).toSeq
@@ -458,7 +458,7 @@ object TrainCitationModel extends HyperparameterMain {
       trainer.initSentenceFeatures(devData)
 //    }
     println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
-    trainer.train(trainingData, devData, params)
+    val f0 = trainer.train(trainingData, devData, params)
     if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
 //    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
 //    val (f0, eval) = evaluator.evaluate(devData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
@@ -474,7 +474,7 @@ object TrainCitationModel extends HyperparameterMain {
 //    val segEval = new SegmentEvaluation[CitationLabel]("(B|U)-", "(I|L)-", LabelDomain, testLabels.toIndexedSeq)
 //    println("TEST")
 //    println(segEval)
-    val f0 = trainer.evaluator.printEvaluationSingle(testData, "TEST FINAL")
+    trainer.evaluator.printEvaluationSingle(testData, "TEST FINAL")
 
     //    println("\nafter:")
 //    trainingData.head.tokens.take(10).foreach(t => println(s"${t.string} ${t.attr[CitationLabel].categoryValue}"))
