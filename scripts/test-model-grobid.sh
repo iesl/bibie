@@ -11,14 +11,13 @@ else
 
     # data
     dataSet="grobid"
-    useGrobidFeatures="false"
-    testfile="$BIBROOT/grobid/testfile.data"
+    useGrobidFeatures="true"
+    testfile="$BIBROOT/grobid-citation-test.data"
     lexicons="file://$BIBROOT/src/main/resources/lexicons"
 
     memSize="10G"
-    CP="$BIBROOT/target/bibie-0.1-SNAPSHOT-jar-with-dependencies.jar"
 
-    java -Xmx${memSize} -cp $CP edu.umass.cs.iesl.bibie.TestCitationModel \
+    $BIBROOT/scripts/run_class.sh -Xmx${memSize} edu.umass.cs.iesl.bibie.TestCitationModel \
     --root-dir=$BIBROOT \
     --model-file=$modelFile \
     --write-evals=$writeEvals \

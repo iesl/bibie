@@ -4,6 +4,7 @@ import java.io._
 import java.net.URL
 
 import cc.factorie._
+import cc.factorie.app.chain.SegmentEvaluation
 import cc.factorie.app.nlp.{TokenSpan, Document, Token}
 import cc.factorie.app.strings._
 import cc.factorie.la.DenseTensor2
@@ -227,7 +228,7 @@ class CitationCRFTrainer {
       case "adagrad" =>
         val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
         println("training with AdaGradRDA ...")
-        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=5, optimizer=optimizer)
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=1, optimizer=optimizer)
       case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
     }
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
@@ -237,7 +238,7 @@ class CitationCRFTrainer {
     val len = model.parameters.tensors.sumInts(_.length)
     val sparsity = tot / len
     println(s"model sparsity: ${sparsity}")
-    evaluator.printEvaluation(testDocuments, testDocuments, "FINAL")
+    evaluator.printEvaluation(trainDocuments, testDocuments, "FINAL")
   }
 
   def process(document: Document): Document = {
@@ -426,19 +427,23 @@ object TrainCitationModel extends HyperparameterMain {
     val trainingData = allData.take(trainPortion)
     //TODO print (train, dev) sizes
     //TODO feature domain trimBelowCount?
-    
-//    println("before:")
+
+    val testData = LoadGrobid.fromFilename(opts.testFile.value, withFeatures=opts.useGrobidFeatures.value)
+
+    //    println("before:")
 //    trainingData.head.tokens.take(10).foreach(t => println(s"${t.string} ${t.attr[CitationLabel].categoryValue}"))
 //    CitationCRFTrainer.printDocument(trainingData.head)
-    val testingData = allData.drop(trainPortion)
+    val devData = allData.drop(trainPortion)
+//    val devData = testData
+
+
     if (opts.useGrobidFeatures.value) {
       initGrobidFeatures(trainingData)
-      CitationFeaturesDomain.freeze()
-      initGrobidFeatures(testingData)
-    } else {
+//      CitationFeaturesDomain.freeze()
+    } //else {
       val lexiconDir = opts.lexiconUrl.value
-      OverSegmenter.overSegment(trainingData ++ testingData, lexiconDir) //TODO don't think we need this here? -ks
-      println("Training: " + trainingData.size + " Testing: " + testingData.size)
+      OverSegmenter.overSegment(trainingData ++ devData ++ testData, lexiconDir) //TODO don't think we need this here? -ks
+      println("Training: " + trainingData.size + " Testing: " + devData.size)
       val lexes = List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
         "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
         "journal.lst", "names.lst", "publishers.lst")
@@ -446,16 +451,32 @@ object TrainCitationModel extends HyperparameterMain {
       for (d <- trainingData) d.tokens.foreach(trainer.wordToFeatures)
       trainer.initSentenceFeatures(trainingData)
       CitationFeaturesDomain.freeze()
-      for (d <- testingData) d.tokens.foreach(trainer.wordToFeatures)
-      trainer.initSentenceFeatures(testingData)
+    if (opts.useGrobidFeatures.value) {
+      initGrobidFeatures(devData)
     }
+      for (d <- devData) d.tokens.foreach(trainer.wordToFeatures)
+      trainer.initSentenceFeatures(devData)
+//    }
     println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
-    trainer.train(trainingData, testingData, params)
+    trainer.train(trainingData, devData, params)
     if (opts.saveModel.value) trainer.serialize(new FileOutputStream(opts.modelFile.value))
-    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
-    val (f0, eval) = evaluator.evaluate(testingData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
-    println(eval)
-//    println("\nafter:")
+//    val evaluator = new ExactlyLikeGrobidEvaluator(opts.rootDir.value)
+//    val (f0, eval) = evaluator.evaluate(devData, opts.outputFile.value, writeFiles=opts.writeEvals.value, outputDir=opts.outputDir.value)
+//    println(eval)
+
+    val testLabels = testData.flatMap(_.tokens).map(_.attr[CitationLabel])
+    if (opts.useGrobidFeatures.value) {
+      initGrobidFeatures(testData)
+    }
+    for (d <- testData) d.tokens.foreach(trainer.wordToFeatures)
+    trainer.initSentenceFeatures(testData)
+    testData.foreach{trainer.process}
+//    val segEval = new SegmentEvaluation[CitationLabel]("(B|U)-", "(I|L)-", LabelDomain, testLabels.toIndexedSeq)
+//    println("TEST")
+//    println(segEval)
+    val f0 = trainer.evaluator.printEvaluationSingle(testData, "TEST FINAL")
+
+    //    println("\nafter:")
 //    trainingData.head.tokens.take(10).foreach(t => println(s"${t.string} ${t.attr[CitationLabel].categoryValue}"))
 //    CitationCRFTrainer.printDocument(trainingData.head)
     f0

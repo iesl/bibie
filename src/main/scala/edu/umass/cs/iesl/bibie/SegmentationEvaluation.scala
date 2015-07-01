@@ -17,6 +17,12 @@ class SegmentationEvaluation[A <: LabeledMutableCategoricalVar[String]](labelDom
     es
   }
 
+  def printEvaluationSingle(documents: Iterable[Document], extraText: String = ""): Double = {
+    println(extraText)
+    val es = evaluationString(documents)
+    es.f1
+  }
+
   def segmentationEvaluation(trainDocuments: Iterable[Document], testDocuments: Iterable[Document], iteration: String): Double = {
     println("Segmentation evaluation")
     println("TRAIN")
@@ -51,11 +57,12 @@ class SegmentationEvaluation[A <: LabeledMutableCategoricalVar[String]](labelDom
     buf.append(new LabeledDiscreteEvaluation(documents.flatMap(_.tokens.map(_.attr[A]))))
     val segmentEvaluation = new cc.factorie.app.chain.SegmentEvaluation[A](labelDomain.categories.filter(x => x.length > 2 && (x.startsWith("I") || x.startsWith("B"))).map(_.substring(2)), "(B|I|U)-", "(I|L)-")
     for (doc <- documents; sentence <- doc.sentences) segmentEvaluation += sentence.tokens.map(_.attr[A])
-    println("Segment evaluation")
-    println(segmentEvaluation.f1)
-    //println(segmentEvaluation)
-    println("Token level evaluation")
-    println(segmentEvaluation.tokenAccuracy)
+    println(segmentEvaluation)
+//    println("Segment evaluation")
+//    println(segmentEvaluation.f1)
+//    //println(segmentEvaluation)
+//    println("Token level evaluation")
+//    println(segmentEvaluation.tokenAccuracy)
     SegEvaluationReport(segmentEvaluation.f1, segmentEvaluation.tokenAccuracy)
   }
   def segEvaluationString(documents: Iterable[Document]): Double = {
