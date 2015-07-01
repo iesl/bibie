@@ -10,11 +10,11 @@ class SegmentationEvaluation[A <: LabeledMutableCategoricalVar[String]](labelDom
 
   def printEvaluation(trainDocuments: Iterable[Document], testDocuments: Iterable[Document], iteration: String): Double = {
     println("TRAIN")
-    evaluationString(trainDocuments)
+    val trainF1 = evaluationString(trainDocuments).f1
     println("TEST")
-    val es = evaluationString(testDocuments).f1
+    val testF1 = evaluationString(testDocuments).f1
     println("Iteration " + iteration)
-    es
+    trainF1
   }
 
   def printEvaluationSingle(documents: Iterable[Document], extraText: String = ""): Double = {

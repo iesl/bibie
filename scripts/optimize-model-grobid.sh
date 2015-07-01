@@ -10,7 +10,7 @@ else
     writeEvals="true"
     outputFile="$BIBROOT/stuff.tmp"
     outputDir="$BIBROOT/results"
-    trainPortion="0.8"
+    trainPortion="1.0"
 
     # data
     dataSet="grobid"
