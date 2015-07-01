@@ -228,7 +228,7 @@ class CitationCRFTrainer {
       case "adagrad" =>
         val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
         println("training with AdaGradRDA ...")
-        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=1, optimizer=optimizer)
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=5, optimizer=optimizer)
       case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
     }
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
