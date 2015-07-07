@@ -38,7 +38,7 @@ object LoadHier {
           }*/
           if (sentence.length > 0) document.appendString(" ")
           val token = new Token(sentence, t)
-          token.attr += new CitationLabel(if (!LabelDomain.frozen || LabelDomain.categories.contains(tag)) tag else "O", token)
+          token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(tag)) tag else "O", token)
           tags.foreach {t => tags(t._1) = (t._2._1, t._2._2 + 1)}
         }
       }
@@ -49,7 +49,10 @@ object LoadHier {
 
   def main(args: Array[String]) {
     for (d <- fromFile(args.head)) {
-      CitationCRFTrainer.printDocument(d)
+      d.tokens.foreach { token => {
+        val label = token.attr[CitationLabel]
+        println(s"${token.string}\t${label.target.categoryValue}\t${label.categoryValue}")
+      }}
     }
   }
 }

@@ -92,7 +92,7 @@ object CitationBIOHelper {
     map += ((a: Token) => a.string.toLowerCase.contains("submitted") || a.string.toLowerCase.contains("preparation"), List("status"))
     map
   }
-  lazy val constrainedTransitionTensor = BIOHelper.getConstrainedTransitionTensor(LabelDomain)
+  lazy val constrainedTransitionTensor = BIOHelper.getConstrainedTransitionTensor(CitationLabelDomain)
   def constrainLocal(varying: Seq[DiscreteVar], localScores: Seq[DenseTensor1], labelDomain: CategoricalDomain[String]) = {
     val map = allowedCitationTags
     val d1 = labelDomain.dimensionSize
@@ -102,7 +102,7 @@ object CitationBIOHelper {
       for (vi <- 0 until d1) {
         val ls = localScores(i)
         if (valid != null)
-          if (!valid.exists(v => LabelDomain(vi).category.contains(v))) ls(vi) = Double.NegativeInfinity
+          if (!valid.exists(v => CitationLabelDomain(vi).category.contains(v))) ls(vi) = Double.NegativeInfinity
       }
     }
   }
@@ -117,7 +117,7 @@ object CitationBIOHelper {
     }
 
     // constrain to not allow starting with anything containing I
-    val badIndices = LabelDomain.toVector.filter(_.category.contains("I-")).map(cv => LabelDomain.index(cv.category))
+    val badIndices = CitationLabelDomain.toVector.filter(_.category.contains("I-")).map(cv => CitationLabelDomain.index(cv.category))
     for (bi <- badIndices) a(0)(bi) = Double.NegativeInfinity
 
     a
@@ -127,7 +127,7 @@ object CitationBIOHelper {
     val markovScoresT = m.transitionTemplate.weights.value + constrainedTransitionTensor
     val markovScores = (0 until variables.size - 1).map(_ => markovScoresT.copy)
     val localScores = getLocalScores(variables, m)
-    if (constrained) constrainLocal(variables, localScores, LabelDomain)
+    if (constrained) constrainLocal(variables, localScores, CitationLabelDomain)
     ChainCliqueValues(localScores, markovScores.map(_.asInstanceOf[DenseTensor2]))
   }
 

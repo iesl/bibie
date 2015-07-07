@@ -6,7 +6,12 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
+class DefaultLexicons(urlPrefix: String) extends Lexicons(urlPrefix, List("institution.lst", "tech.lst", "note.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
+"cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst", "temporal_words.txt", "authors.lst",
+"journal.lst", "names.lst", "publishers.lst"))
+
 class Lexicons(val urlPrefix: String, val lexicons: List[String]) {
+
   val lexiconMap = mutable.HashMap[String, List[String]]()
   val lexiconNames = ArrayBuffer[String]()
 
@@ -37,8 +42,6 @@ class Lexicons(val urlPrefix: String, val lexicons: List[String]) {
       val key = removeTrail(keyPre.map(_.string).mkString(" "))
       if (lexiconMap.contains(key) && (removeTrail(token.string) != "" || (keyPre.head.position < token.position && keyPre.last.position > token.position))) {
         lexes = lexiconMap(key).map(locate(token, keyPre) +) ::: lexes
-        //println("Found for token: " + token.string + " with key: " + keyPre + " the lexicons: " + lexiconMap(key).mkString(" , "))
-        //println("And phrase: " + phrase.map( _.string ).mkString(" "))
       }
     }
     lexes
@@ -87,10 +90,7 @@ class Lexicons(val urlPrefix: String, val lexicons: List[String]) {
 object Lexicons {
   var lo: Lexicons = null
   def main(args: Array[String]) {
-    val lexes = List("WikiLocations.lst", "WikiLocationsRedirects.lst", "WikiOrganizations.lst", "WikiOrganizationsRedirects.lst",
-      "cardinalNumber.txt", "known_corporations.lst", "known_country.lst", "known_name.lst", "known_names.big.lst", "known_state.lst",
-      "temporal_words.txt", "authors.lst", "journal.lst", "names.lst", "wikiJournal.lst", "publishers.lst")
-    val lexicons = new Lexicons("src/main/resources/lexicons", lexes)
+    val lexicons = new DefaultLexicons("src/main/resources/lexicons")
     val docs = new ArrayBuffer[Document]()
     for (l <- Source.fromURL(args(0)).getLines()) {
       val d = new Document("a" + docs.length)

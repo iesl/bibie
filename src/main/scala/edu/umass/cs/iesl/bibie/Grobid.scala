@@ -61,12 +61,10 @@ object LoadGrobid {
           }
         }
         val string = parts.head
-        val features = parts.dropRight(1)
+        val features = parts.dropRight(1).zipWithIndex.map{case(f, i) => "G@" + i + "=" + f}
         val token = new Token(currSent, string)
         if (withFeatures) token.attr += new PreFeatures(features, token) //put in PreFeatures so we can freeze CitationFeaturesDomain after loading training / before loading dev
-        //token.attr += new CitationFeatures(token)
-        //token.attr[CitationFeatures] ++= features
-        token.attr += new CitationLabel(if (!LabelDomain.frozen || LabelDomain.categories.contains(label)) label else "O", token)
+        token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(label)) label else "O", token)
         tokenCount += 1
       } else {
         if (currSent.length > 0) currDoc.appendString("")
@@ -129,8 +127,8 @@ object LoadGrobid {
         val token = new Token(currSent, string)
         token.attr += new CitationFeatures(token)
         token.attr[CitationFeatures] ++= features
-        token.attr += new CitationLabel(if (!LabelDomain.frozen || LabelDomain.categories.contains(guessLabel)) guessLabel else "O", token)
-        token.attr += new GoldCitationLabel(if (!LabelDomain.frozen || LabelDomain.categories.contains(trueLabel)) trueLabel else "O", token)
+        token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(guessLabel)) guessLabel else "O", token)
+        token.attr += new GoldCitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(trueLabel)) trueLabel else "O", token)
         tokenCount += 1
       } else {
         if (currSent.length > 0) currDoc.appendString("")
