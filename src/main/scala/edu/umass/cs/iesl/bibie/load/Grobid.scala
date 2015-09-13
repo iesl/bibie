@@ -1,12 +1,16 @@
-package edu.umass.cs.iesl.bibie
+package edu.umass.cs.iesl.bibie.load
 
 /**
  * Created by kate on 5/13/15.
  */
 
+import edu.umass.cs.iesl.bibie.model.{CitationLabelDomain, CitationLabel, CitationFeatures}
+import edu.umass.cs.iesl.bibie.segment._
+
 import cc.factorie.app.nlp._
-import scala.io.Source
+
 import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
 
 /**
  * Infrastructure for comparison of GROBID vs IESL.

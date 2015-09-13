@@ -1,4 +1,4 @@
-package edu.umass.cs.iesl.bibie
+package edu.umass.cs.iesl.bibie.load
 
 import scala.collection.mutable
 

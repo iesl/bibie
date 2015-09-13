@@ -1,8 +1,12 @@
-package edu.umass.cs.iesl.bibie
+package edu.umass.cs.iesl.bibie.load
 
-import cc.factorie.app.nlp.{Token, Sentence, Document}
-import io.Source
-import collection.mutable
+import cc.factorie.app.nlp.{Document, Sentence, Token}
+import edu.umass.cs.iesl.bibie.model.{CitationLabelDomain, CitationLabel}
+
+import edu.umass.cs.iesl.bibie.segment._
+
+import scala.collection.mutable
+import scala.io.Source
 
 object LoadHier {
   def fromFile(filename: String): Seq[Document] = {

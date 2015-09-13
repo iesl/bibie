@@ -1,4 +1,4 @@
-package edu.umass.cs.iesl.bibie
+package edu.umass.cs.iesl.bibie.evaluate
 
 import cc.factorie.app.nlp.Document
 import cc.factorie.variable.{CategoricalDomain, LabeledDiscreteEvaluation, LabeledMutableCategoricalVar}

@@ -1,13 +1,13 @@
-package edu.umass.cs.iesl.bibie
+package edu.umass.cs.iesl.bibie.model
 
 import cc.factorie._
-import cc.factorie.la._
+import cc.factorie.app.chain.{ChainCliqueValues, ChainHelper}
 import cc.factorie.app.nlp.Token
-import infer._
+import cc.factorie.infer._
+import cc.factorie.la._
+import cc.factorie.variable.{CategoricalDomain, DiscreteVar, MutableDiscreteVar}
+
 import scala.collection.mutable.ArrayBuffer
-import cc.factorie.variable.{MutableDiscreteVar, CategoricalDomain, DiscreteVar}
-import cc.factorie.model.Weights2
-import cc.factorie.app.chain.{ChainModel, ChainHelper, ChainCliqueValues}
 
 trait Results {
   def setToMax(variables: Seq[MutableDiscreteVar]): Unit = nodeMarginals.zip(variables).map({case (nm, v) => v.set(nm.maxIndex)(null)})

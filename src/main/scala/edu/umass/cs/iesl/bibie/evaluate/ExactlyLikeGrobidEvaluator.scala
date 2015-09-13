@@ -1,12 +1,16 @@
-package edu.umass.cs.iesl.bibie
+package edu.umass.cs.iesl.bibie.evaluate
 
-import cc.factorie.app.nlp._
-import scala.collection.mutable.ArrayBuffer
 import java.io._
 import java.util.StringTokenizer
+
+import cc.factorie.app.nlp._
+import edu.umass.cs.iesl.bibie.load.{GoldCitationLabel, LoadGrobid}
+import edu.umass.cs.iesl.bibie.model._
+
+import scala.collection.mutable.ArrayBuffer
 // NOTE: these require Java 8
-import java.time.format.DateTimeFormatter
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * Created by kate on 5/14/15.

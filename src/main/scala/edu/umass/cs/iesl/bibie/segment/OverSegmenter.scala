@@ -1,8 +1,9 @@
-package edu.umass.cs.iesl.bibie
+package edu.umass.cs.iesl.bibie.segment
 
 import java.util.concurrent.ExecutorService
 
 import cc.factorie.app.nlp.{Document, Token}
+import edu.umass.cs.iesl.bibie.model.{CitationSpan, SegmentSpan}
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap}
@@ -530,7 +531,7 @@ class OverSegmenter(locUrls: Seq[String] = Array[String](), monUrls: Seq[String]
             prev()
             state = new End(state.asInstanceOf[Begin])
           } else if (((token.string.toLowerCase == "and" || token.string.toLowerCase == "und" || token.string.toLowerCase == "&") && notAndExclude(token) && !notAuthor) || (isDigits(token) &&
-                                                                                                                                                                             notProc(token) && notInBefore(token) && notSame(token) && notEdition(token) && notZip(token) && notTwoWithComma(token) && notTh(token) && prevNotMiddleDate(token) && hasHyphen(token) && prevNotDate(token) && (token.hasPrev && token.prev.string != "the" && token.prev.string != "of" && token.prev.string != "(" && noDate(token.prev))) || (token.string.matches(startsSeq.toString()) && notEditor(token))) {
+            notProc(token) && notInBefore(token) && notSame(token) && notEdition(token) && notZip(token) && notTwoWithComma(token) && notTh(token) && prevNotMiddleDate(token) && hasHyphen(token) && prevNotDate(token) && (token.hasPrev && token.prev.string != "the" && token.prev.string != "of" && token.prev.string != "(" && noDate(token.prev))) || (token.string.matches(startsSeq.toString()) && notEditor(token))) {
             if (t.position == token.position || !prevNotPagesOrAp(token)) {
               if (token.hasNext && (token.next.string == "a" || token.next.string == "b")) next()
               state = new End(state.asInstanceOf[Begin])
