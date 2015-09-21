@@ -8,8 +8,16 @@ import edu.umass.cs.iesl.bibie.segment._
 import scala.collection.mutable
 import scala.io.Source
 
+import java.util.logging.Logger
+
 object LoadHier {
+
+  private val logger = Logger.getLogger(getClass.getName)
+
   def fromFile(filename: String): Seq[Document] = {
+
+    logger.info("loading filename: " + filename)
+
     var document: Document = null
     val documents = new collection.mutable.ArrayBuffer[Document]
     var sentence: Sentence = null

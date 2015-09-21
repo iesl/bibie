@@ -1,6 +1,7 @@
 package edu.umass.cs.iesl.bibie.model
 
 import cc.factorie.app.nlp.{Document, Token, TokenSpan}
+import cc.factorie.app.nlp.ner.BIO
 import cc.factorie.variable.{CategoricalDomain, DiffList, LabeledCategoricalVariable}
 
 object CitationLabelDomain extends CategoricalDomain[String]
@@ -31,4 +32,32 @@ object SpanLabelDomain extends CategoricalDomain[String]
 
 class SpanCitationLabel(val span: CitationSpan, initialValue: String) extends CLabel(initialValue) {
   def domain = SpanLabelDomain
+}
+
+object GrobidLabelDomain extends CategoricalDomain[String] {
+  this ++= Vector(
+    "<author>",
+    "<booktitle>",
+    "<date>",
+    "<editor>",
+    "<institution>",
+    "<issue>",
+    "<journal>",
+    "<location>",
+    "<note>",
+    "<other>",
+    "<pages>",
+    "<publisher>",
+    "<pubnum>",
+    "<tech>",
+    "<title>",
+    "<volume>",
+    "<web>"
+  )
+  freeze()
+}
+
+object BioGrobidLabelDomain extends CategoricalDomain[String] with BIO {
+  this ++= encodedTags(GrobidLabelDomain.categories)
+  freeze()
 }

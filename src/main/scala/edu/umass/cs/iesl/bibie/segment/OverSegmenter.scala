@@ -1,6 +1,7 @@
 package edu.umass.cs.iesl.bibie.segment
 
 import java.util.concurrent.ExecutorService
+import java.util.logging.Logger
 
 import cc.factorie.app.nlp.{Document, Token}
 import edu.umass.cs.iesl.bibie.model.{CitationSpan, SegmentSpan}
@@ -574,14 +575,27 @@ class OverSegmenter(locUrls: Seq[String] = Array[String](), monUrls: Seq[String]
 case class CitationSpanList(spans: Seq[CitationSpan])
 
 object OverSegmenter {
+
+  private val logger = Logger.getLogger(getClass.getName)
+
   def overSegment(documents: Seq[Document], lexiconUrlBase: String, pool: Option[ExecutorService] = None) {
-    val sources = Array("known_country.lst", "known_place.lst", "known_state.lst", "WikiLocations.lst", "WikiLocationsRedirects.lst").map(lexiconUrlBase + "/" +)
+
+    val sources = Array(
+      "known_country.lst",
+      "known_place.lst",
+      "known_state.lst",
+      "WikiLocations.lst",
+      "WikiLocationsRedirects.lst"
+    ).map(lexiconUrlBase + "/" +)
+
     val segmenter = new OverSegmenter(sources, Array(lexiconUrlBase + "/months.lst"))
-    println("Segmenting citations")
+    logger.info("Segmenting citations")
 
     def processDoc(x: Document) = {
       try {
         val spans = segmenter.segment(x)
+
+        // TODO what does this even do?
         copyToSeg(x, spans)
         x.attr += CitationSpanList(spans)
 
@@ -591,6 +605,7 @@ object OverSegmenter {
         case iob: ArrayIndexOutOfBoundsException => println(iob.getMessage)
       }
     }
+
     if (pool.isDefined) {
       cc.factorie.util.Threading.parForeach(documents, pool.get)(processDoc(_))
     } else {
@@ -598,8 +613,15 @@ object OverSegmenter {
     }
     println("Segmentation complete")
   }
+
   def copyToSeg(doc: Document, spans: Seq[CitationSpan]) {
     for (span <- spans) {
+      new SegmentSpan(span.document, span.start, span.length)(null)
+    }
+  }
+
+  def copyToSeg2(doc: Document, spans: Seq[CitationSpan]): Seq[SegmentSpan] = {
+    spans.map { span =>
       new SegmentSpan(span.document, span.start, span.length)(null)
     }
   }

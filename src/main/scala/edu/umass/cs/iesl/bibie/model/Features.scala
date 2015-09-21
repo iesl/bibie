@@ -2,6 +2,7 @@ package edu.umass.cs.iesl.bibie.model
 
 import cc.factorie.app.nlp.{Token, Document}
 import cc.factorie.app.strings._
+import cc.factorie.variable.{BinaryFeatureVectorVariable, CategoricalVectorDomain}
 import edu.umass.cs.iesl.bibie.load.PreFeatures
 import edu.umass.cs.iesl.bibie.segment.CitationSpanList
 import edu.umass.cs.iesl.bibie.util.Lexicons
@@ -10,6 +11,13 @@ import edu.umass.cs.iesl.bibie.util.Lexicons
  * @author Kate Silverstein 
  *         created on 9/13/15
  */
+object CitationFeaturesDomain extends CategoricalVectorDomain[String]
+
+class CitationFeatures(val token: Token) extends BinaryFeatureVectorVariable[String] {
+  def domain = CitationFeaturesDomain
+  override def skipNonCategories = true
+}
+
 class Features(val lexicons: Lexicons) {
 
   val Capitalized = "^[A-Z].*"
