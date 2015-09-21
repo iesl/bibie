@@ -7,6 +7,7 @@ import cc.factorie.util.CubbieConversions._
 import cc.factorie.util.BinarySerializer
 
 import java.io._
+import java.net.URL
 import java.util.logging.Logger
 /**
  * @author Kate Silverstein 
@@ -19,37 +20,33 @@ object IOHelper {
   def deserializeModel(path: String, lexiconsPath: String): CitationCRFModel = {
     val lexicons = new DefaultLexicons(lexiconsPath)
     val model = new CitationCRFModel(lexicons)
-    val modelPath = if (!path.startsWith("file://")) "file://" + path else path
-    logger.info(s"deserializing model from $modelPath")
-    val url = new java.net.URL(modelPath)
-    val inputStream = url.openConnection.getInputStream
-    logger.info("got inputStream")
-    val dis = new DataInputStream(inputStream)
-    BinarySerializer.deserialize(CitationLabelDomain, dis)
-    logger.info(s"deserialized label domain (${CitationLabelDomain.size} categories)")
+    val fis = new FileInputStream(path)
+    val is = new DataInputStream(fis)
+    BinarySerializer.deserialize(CitationLabelDomain, is)
     CitationLabelDomain.freeze()
-    BinarySerializer.deserialize(CitationFeaturesDomain, dis)
-    logger.info(s"deserialized feature domain (${CitationFeaturesDomain.dimensionSize} dimensions)")
+    logger.info(s"deserialized CitationLabelDomain: ${CitationLabelDomain.dimensionSize} categories")
+    BinarySerializer.deserialize(CitationFeaturesDomain, is)
     CitationFeaturesDomain.freeze()
-    BinarySerializer.deserialize(model, dis)
-    logger.info("deserialized model.")
-    dis.close()
+    logger.info(s"deserialized CitationFeaturesDomain: ${CitationFeaturesDomain.dimensionSize} dimensions")
+    BinarySerializer.deserialize(model, is)
+    logger.info(s"deserialized model: ${model.sparsity} sparsity")
+    is.close()
+    fis.close()
     model
   }
 
   def serializeModel(path: String, model: CitationCRFModel): Unit = {
-    val modelPath = if (!path.startsWith("file://")) "file://" + path else path
-    val url = new java.net.URL(modelPath)
-    val os = url.openConnection.getOutputStream
-    val dos = new DataOutputStream(os)
+    val fos = new FileOutputStream(path)
+    val os = new DataOutputStream(fos)
     if (!CitationLabelDomain.frozen) CitationLabelDomain.freeze()
-    BinarySerializer.serialize(CitationLabelDomain, dos)
-    logger.info(s"serialized label domain (${CitationLabelDomain.size} categories)")
-    BinarySerializer.serialize(CitationFeaturesDomain, dos)
-    logger.info(s"serialized feature domain (${CitationFeaturesDomain.dimensionSize} dimensions)")
-    BinarySerializer.serialize(model, dos)
-    logger.info("serialized model.")
-    dos.close()
+    BinarySerializer.serialize(CitationLabelDomain, os)
+    logger.info(s"serialized CitationLabelDomain: ${CitationLabelDomain.dimensionSize} categories")
+    BinarySerializer.serialize(CitationFeaturesDomain, os)
+    logger.info(s"serialized CitationFeaturesDomain: ${CitationFeaturesDomain.dimensionSize} dimensions")
+    BinarySerializer.serialize(model, os)
+    logger.info(s"serialized model: ${model.sparsity} sparsity")
+    os.close()
+    fos.close()
   }
 
 }
