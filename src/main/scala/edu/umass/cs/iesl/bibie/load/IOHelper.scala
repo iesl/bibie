@@ -7,7 +7,6 @@ import cc.factorie.util.CubbieConversions._
 import cc.factorie.util.BinarySerializer
 
 import java.io._
-import java.net.URL
 import java.util.logging.Logger
 /**
  * @author Kate Silverstein 

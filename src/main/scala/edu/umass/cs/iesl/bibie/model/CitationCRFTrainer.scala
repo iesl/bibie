@@ -187,8 +187,8 @@ object TrainCitationModel extends HyperparameterMain {
     val params = new Hyperparams(opts)
     val lexiconDir = opts.lexiconUrl.value
     val trainer = new CitationCRFTrainer(new DefaultLexicons(lexiconDir))
-    val trainDocs = LoadHier.fromFile(opts.trainFile.value).take(15) //FIXME
-    val devDocs = LoadHier.fromFile(opts.devFile.value).take(5) //FIXME
+    val trainDocs = LoadHier.fromFile(opts.trainFile.value)
+    val devDocs = LoadHier.fromFile(opts.devFile.value)
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
     val trainEval = trainer.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
@@ -196,13 +196,6 @@ object TrainCitationModel extends HyperparameterMain {
       logger.info(s"serializing model to ${opts.modelFile.value}")
       IOHelper.serializeModel(opts.modelFile.value, trainer.model)
     }
-
-    // TODO remove me later
-    val testModel = IOHelper.deserializeModel(opts.modelFile.value, opts.lexiconUrl.value)
-    logger.info("deserialized mode from " + opts.modelFile.value)
-    val ann = new BibieAnnotator(testModel)
-    devDocs.foreach(ann.process)
-
     trainEval
   }
 
