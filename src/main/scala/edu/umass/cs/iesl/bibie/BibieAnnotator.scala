@@ -3,6 +3,7 @@ package edu.umass.cs.iesl.bibie
 import cc.factorie.app.nlp._
 
 import edu.umass.cs.iesl.bibie.model.{CitationCRFModel, CitationFeatures, CitationLabel, CitationBIOHelper}
+import edu.umass.cs.iesl.bibie.segment.{CitationSpanList, OverSegmenter}
 import edu.umass.cs.iesl.bibie._
 
 /**
@@ -29,12 +30,19 @@ class BibieAnnotator(model: CitationCRFModel) extends DocumentAnnotator {
       val sum = CitationBIOHelper.infer(vars, model)
       sum.setToMaximize(null)
     }
+    // remove features
+    document.tokens.foreach { token =>
+      if (token.attr[CitationFeatures] != null) {
+        token.attr.remove[CitationFeatures]
+      }
+    }
     document
   }
 
   override def postAttrs: Iterable[Class[_]] = Seq(classOf[CitationLabel])
 
-  override def prereqAttrs: Iterable[Class[_]] = Seq(classOf[Sentence], classOf[Token])
+  // assumes OverSegmenter has already been run on document
+  override def prereqAttrs: Iterable[Class[_]] = Seq(classOf[Sentence], classOf[Token], classOf[CitationSpanList])
 
   override def tokenAnnotationString(token: Token): String = token.attr[CitationLabel].categoryValue
 

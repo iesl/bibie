@@ -10,13 +10,14 @@ class SegmentationEvaluation[A <: LabeledMutableCategoricalVar[String]](labelDom
 
   def printEvaluation(trainDocuments: Iterable[Document], testDocuments: Iterable[Document], iteration: String): Double = {
     println("Iteration " + iteration)
-    println("TRAIN")
-    val trainF1 = evaluationString(trainDocuments).f1
-    println("TEST")
-    if(!testDocuments.isEmpty) {
-      evaluationString(testDocuments).f1
-    }
-    else trainF1
+    printEvaluation(trainDocuments, extra = "TRAIN")
+    printEvaluation(testDocuments, extra = "TEST")
+  }
+
+  def printEvaluation(docs: Iterable[Document], extra: String = ""): Double = {
+    println(extra)
+    val f1 = evaluationString(docs).f1
+    f1
   }
 
   def printEvaluationSingle(documents: Iterable[Document], extraText: String = ""): Double = {
@@ -26,12 +27,14 @@ class SegmentationEvaluation[A <: LabeledMutableCategoricalVar[String]](labelDom
   }
 
   def segmentationEvaluation(trainDocuments: Iterable[Document], testDocuments: Iterable[Document], iteration: String): Double = {
-    println("Segmentation evaluation")
-    println("TRAIN")
-    segEvaluationString(trainDocuments)
-    println("TEST")
-    var es = segEvaluationString(testDocuments)
-    println("Iteration " + iteration)
+    println("Segmentation Evaluation")
+    segmentationEvaluation(trainDocuments, extra = "TRAIN")
+    segmentationEvaluation(testDocuments, extra = "TEST")
+  }
+
+  def segmentationEvaluation(docs: Iterable[Document], extra: String = ""): Double = {
+    println(extra)
+    val es = segEvaluationString(docs)
     es
   }
 

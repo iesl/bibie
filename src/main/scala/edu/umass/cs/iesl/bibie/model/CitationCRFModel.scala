@@ -8,6 +8,7 @@ import cc.factorie.model.{DotTemplateWithStatistics2, TemplateModel}
 import edu.umass.cs.iesl.bibie.load.PreFeatures
 import edu.umass.cs.iesl.bibie.evaluate.SegmentationEvaluation
 import edu.umass.cs.iesl.bibie.util.{DefaultLexicons, Lexicons}
+import edu.umass.cs.iesl.bibie.segment.OverSegmenter
 
 class CitationCRFModel(lexicons: Lexicons) extends TemplateModel with Parameters {
 

@@ -5,7 +5,7 @@ import cc.factorie.app.nlp.Document
 
 import edu.umass.cs.iesl.bibie.model._
 import edu.umass.cs.iesl.bibie.load.IOHelper
-import edu.umass.cs.iesl.bibie.segment.CitationSpanList
+import edu.umass.cs.iesl.bibie.segment.{OverSegmenter, CitationSpanList}
 
 import scala.io.StdIn
 import scala.collection.mutable
@@ -52,6 +52,7 @@ object Cli {
         case "tokens" => printTokens()
 
         case "process" => processDocs()
+        case "eval" => evaluate()
 
         case "segment" => oversegment()
         case "train" => TrainCitationModel.trainModel(opts)
@@ -66,9 +67,24 @@ object Cli {
   }
 
   def processDocs(): Unit = {
-    assert(state.model != null, "state.model is null, need to load it first")
+    if (state.model == null) {
+      logger.info("loading model from " + opts.modelFile.value)
+      loadModel()
+    }
+    oversegment()
     val ann = new BibieAnnotator(state.model)
     state.docs.foreach(ann.process)
+  }
+
+  def evaluate(): Unit = {
+    import edu.umass.cs.iesl.bibie.evaluate.SegmentationEvaluation
+    implicit val random = new scala.util.Random(0)
+    val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+    val labels: Seq[CitationLabel] = state.docs.flatMap(_.tokens.map(_.attr[CitationLabel]))
+    labels.foreach(_.setRandomly)
+    processDocs()
+    evaluator.printEvaluation(state.docs, "DEV (printEvaluation)")
+    evaluator.segmentationEvaluation(state.docs, "DEV (segmentationEvaluation)")
   }
 
   def loadDocs(): Unit = {
@@ -104,7 +120,9 @@ object Cli {
     val doc = state.docs(state.idx)
     for (t <- doc.tokens) {
       val label = t.attr[CitationLabel].categoryValue
-      println(s"${t.string}\t$label")
+      val gold = t.attr[CitationLabel].target.categoryValue
+      val mistake = if (label.equals(gold)) "" else "*"
+      println(s"$mistake\t${t.string}\t$label\t$gold")
     }
   }
 
@@ -114,7 +132,6 @@ object Cli {
   }
 
   def oversegment(): Unit = {
-    import edu.umass.cs.iesl.bibie.segment.OverSegmenter
     OverSegmenter.overSegment(state.docs, opts.lexiconUrl.value)
   }
 }
