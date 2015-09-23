@@ -1,6 +1,6 @@
 package edu.umass.cs.iesl.bibie.model
 
-import cc.factorie.app.nlp.{Document, Token, TokenSpan}
+import cc.factorie.app.nlp._
 import cc.factorie.app.nlp.ner.BIO
 import cc.factorie.variable.{CategoricalDomain, DiffList, LabeledCategoricalVariable}
 
@@ -16,6 +16,7 @@ class CitationLabel(labelname: String, val token: Token) extends CLabel(labelnam
   def prev = token.prev
 }
 
+// TODO what is this for / where was it meant to be used??
 class SegmentSpan(doc: Document, start: Int, length: Int, var latch: Boolean = false)(implicit d: DiffList) extends TokenSpan(doc.asSection, start, length) {
   var latchLabel = ""
   var cantBegin = false
@@ -26,10 +27,25 @@ class SegmentSpan(doc: Document, start: Int, length: Int, var latch: Boolean = f
 class CitationSpan(doc: Document, labelString: String, start: Int, length: Int) extends TokenSpan(doc.asSection, start, length) {
   val label = new SpanCitationLabel(this, labelString)
   override def toString() = "CitationSpan(" + length + "," + label.categoryValue + ":" + this.string + ")"
+  def toXML: String = {
+    val parts = labelString.split(":")
+    val baseParts = parts.map { p =>
+      if (p.startsWith("B-") || p.startsWith("I-")) p.substring(2) else p
+    }
+    val beginParts = baseParts.map(p => s"<$p>")
+    val endParts = baseParts.reverseMap(p => s"</$p>")
+    val contents = this.tokensString(" ")
+    s"${beginParts.mkString("")}$contents${endParts.mkString("")}"
+  }
 }
 
+class CitationSpanBuffer extends TokenSpanBuffer[CitationSpan]
+
+
+// TODO what is this for?
 object SpanLabelDomain extends CategoricalDomain[String]
 
+// TODO what is this for?
 class SpanCitationLabel(val span: CitationSpan, initialValue: String) extends CLabel(initialValue) {
   def domain = SpanLabelDomain
 }

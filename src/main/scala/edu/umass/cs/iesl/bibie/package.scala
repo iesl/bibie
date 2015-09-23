@@ -2,6 +2,8 @@ package edu.umass.cs.iesl
 
 import cc.factorie.util._
 import cc.factorie.app.nlp._
+import edu.umass.cs.iesl.bibie.segment.CitationSpanList
+import edu.umass.cs.iesl.bibie.model.CitationSpan
 
 /**
  * Created by strubell on 7/3/15.
@@ -28,8 +30,13 @@ package object bibie {
   }
 
   implicit class DocumentExtras(doc: Document) {
-    def toXML(): String = {
-      s"<document>${doc.name}</document>"
+    def toXML: String = {
+      val spans: Seq[CitationSpan] = doc.attr[CitationSpanList].spans
+      val xml = spans.map(_.toXML)
+      var str = s"<document>\n<name>${doc.name}</name>\n"
+      str += xml.mkString("\n")
+      str += "\n</document>"
+      str
     }
   }
 

@@ -3,7 +3,7 @@ package edu.umass.cs.iesl.bibie.segment
 import java.util.concurrent.ExecutorService
 import java.util.logging.Logger
 
-import cc.factorie.app.nlp.{Document, Token}
+import cc.factorie.app.nlp.{Document, Token, DocumentAnnotator}
 import edu.umass.cs.iesl.bibie.model.{CitationSpan, SegmentSpan}
 
 import scala.collection.mutable
@@ -614,6 +614,7 @@ object OverSegmenter {
     println("Segmentation complete")
   }
 
+  //TODO what does this do?
   def copyToSeg(doc: Document, spans: Seq[CitationSpan]) {
     for (span <- spans) {
       new SegmentSpan(span.document, span.start, span.length)(null)
@@ -625,4 +626,42 @@ object OverSegmenter {
       new SegmentSpan(span.document, span.start, span.length)(null)
     }
   }
+}
+
+class OverSegmenterAnnotator(lexiconUrlBase: String) extends DocumentAnnotator {
+
+  val sources = Array(
+    "known_country.lst",
+    "known_place.lst",
+    "known_state.lst",
+    "WikiLocations.lst",
+    "WikiLocationsRedirects.lst"
+  ).map(lexiconUrlBase + "/" +)
+
+  val segmenter = new OverSegmenter(sources, Array(lexiconUrlBase + "/months.lst"))
+
+  def process(document: Document): Document = {
+    try {
+      val spans = segmenter.segment(document)
+      copyToSeg(document, spans)
+      document.attr += CitationSpanList(spans)
+    } catch {
+      case npe: NullPointerException => println(npe.getMessage)
+      case iob: ArrayIndexOutOfBoundsException => println(iob.getMessage)
+    }
+    document
+  }
+
+  //TODO what does this do?
+  def copyToSeg(doc: Document, spans: Seq[CitationSpan]) {
+    for (span <- spans) {
+      new SegmentSpan(span.document, span.start, span.length)(null)
+    }
+  }
+
+  def prereqAttrs: Iterable[Class[_]] = ???
+
+  def postAttrs: Iterable[Class[_]] = Seq(classOf[CitationSpanList])
+
+  def tokenAnnotationString(token: Token): String = ???
 }

@@ -50,6 +50,7 @@ object Cli {
 
         case "xml" => printXML()
         case "tokens" => printTokens()
+        case "spans" => printSpans()
 
         case "process" => processDocs()
         case "eval" => evaluate()
@@ -71,8 +72,8 @@ object Cli {
       logger.info("loading model from " + opts.modelFile.value)
       loadModel()
     }
-    oversegment()
-    val ann = new BibieAnnotator(state.model)
+//    oversegment()
+    val ann = new BibieAnnotator(state.model, opts.lexiconUrl.value)
     state.docs.foreach(ann.process)
   }
 
@@ -114,6 +115,9 @@ object Cli {
     for (t <- doc.tokens) {
       println(s"${t.string}\t${t.attr.toString()}")
     }
+    println("\t\t*\t*\t*")
+    println("xml:")
+    println(doc.toXML)
   }
 
   def printTokens(): Unit = {
@@ -126,9 +130,17 @@ object Cli {
     }
   }
 
+  def printSpans(): Unit = {
+    val doc = state.docs(state.idx)
+    val spans = doc.attr[CitationSpanBuffer]
+    for (s <- spans) {
+      println(s.toXML)
+    }
+  }
+
   def printXML(): Unit = {
     val doc = state.docs(state.idx)
-    println(doc.toXML())
+    println(doc.toXML)
   }
 
   def oversegment(): Unit = {

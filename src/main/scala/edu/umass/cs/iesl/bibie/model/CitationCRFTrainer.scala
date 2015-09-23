@@ -1,7 +1,5 @@
 package edu.umass.cs.iesl.bibie.model
 
-import java.io._
-import java.net.URL
 import java.util.logging.Logger
 
 import cc.factorie.app.nlp.{Document, Sentence, Token}
@@ -33,6 +31,8 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
 //  def this(modelPath: String, lexicons: Lexicons) = {
 //    this(new URL("file://" + modelPath), lexicons)
 //  }
+
+  private val logger = Logger.getLogger(getClass.getName)
 
   val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
   val model = new CitationCRFModel(lexicons)
@@ -73,36 +73,35 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
     (trainLabels ++ testLabels).filter(_ != null).foreach(_.setRandomly(random))
     val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])
     val examples = vars.map(v => new LikelihoodExample(v.toSeq, model, cc.factorie.infer.InferByBPChain))
-    val annotator = new BibieAnnotator(model)
+    val annotator = new BibieAnnotator(model, params.lexiconUrl)
+
     def evaluate(): Unit = {
-      trainDocuments.foreach(annotator.process)
-      testDocuments.foreach(annotator.process)
+      trainDocuments.foreach(annotator.processDuringTraining)
+      testDocuments.foreach(annotator.processDuringTraining)
       model.evaluate(trainDocuments, "TRAINING")
       model.evaluate(testDocuments, "DEV")
-//      evaluator.printEvaluation(trainDocuments, testDocuments, "TRAINING")
     }
+
     params.optimizer match {
       case "lbfgs" =>
         val optimizer = new LBFGS with L2Regularization
         val trainer = new ThreadLocalBatchTrainer(model.parameters, optimizer)
-        println("training with LBFGS ...")
+        logger.info("training with LBFGS ...")
         trainer.trainFromExamples(examples)
       case "adagrad" =>
         val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
-        println("training with AdaGradRDA ...")
-        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer)
+        logger.info("training with AdaGradRDA ...")
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer, logEveryN=2)
       case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
     }
+
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
     trainDocuments.foreach(annotator.process)
     testDocuments.foreach(annotator.process)
-//    trainDocuments.foreach(process)
-//    testDocuments.foreach(process)
     val tot = model.parameters.tensors.sumInts(t => t.toSeq.count(x => x == 0)).toFloat
     val len = model.parameters.tensors.sumInts(_.length)
     val sparsity = tot / len
-    println(s"model sparsity: $sparsity")
-//    evaluator.printEvaluation(trainDocuments, testDocuments, "FINAL")
+    logger.info(s"model sparsity: $sparsity")
     model.evaluate(trainDocuments, "TRAINING (FINAL)")
     model.evaluate(testDocuments, "DEV (FINAL)")
   }
@@ -125,7 +124,9 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
         i += 1
       }
     } else {
-      documents.par.foreach { document => model.computeDocumentFeatures(document, training = false) }
+      documents.par.foreach { document =>
+        model.computeDocumentFeatures(document, training = false)
+      }
     }
   }
 
@@ -187,8 +188,8 @@ object TrainCitationModel extends HyperparameterMain {
     val params = new Hyperparams(opts)
     val lexiconDir = opts.lexiconUrl.value
     val trainer = new CitationCRFTrainer(new DefaultLexicons(lexiconDir))
-    val trainDocs = LoadHier.fromFile(opts.trainFile.value)
-    val devDocs = LoadHier.fromFile(opts.devFile.value)
+    val trainDocs = LoadHier.fromFile(opts.trainFile.value).take(100)
+    val devDocs = LoadHier.fromFile(opts.devFile.value).take(50)
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
     val trainEval = trainer.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
@@ -196,6 +197,11 @@ object TrainCitationModel extends HyperparameterMain {
       logger.info(s"serializing model to ${opts.modelFile.value}")
       IOHelper.serializeModel(opts.modelFile.value, trainer.model)
     }
+    logger.info("load/test deserialized model...")
+    val model = IOHelper.deserializeModel(opts.modelFile.value, opts.lexiconUrl.value)
+    val ann = new BibieAnnotator(model, opts.lexiconUrl.value)
+    devDocs.foreach(ann.process)
+    model.evaluate(devDocs, "DEV")
     trainEval
   }
 
@@ -232,22 +238,11 @@ object TrainCitationModel extends HyperparameterMain {
 object TestCitationModel {
 
   def testModel(opts: BibieOptions): Unit = {
-    val params = new Hyperparams(opts)
-    val lexiconDir = opts.lexiconUrl.value
-    val testDocs = LoadHier.fromFile(opts.testFile.value)
-    OverSegmenter.overSegment(testDocs, lexiconDir)
     val model = IOHelper.deserializeModel(opts.modelFile.value, opts.lexiconUrl.value)
-    val ann = new BibieAnnotator(model)
+    val testDocs = LoadHier.fromFile(opts.testFile.value)
+    val ann = new BibieAnnotator(model, opts.lexiconUrl.value)
     testDocs.foreach(ann.process)
     model.evaluate(testDocs, "TESTING")
-
-
-//    val tagger = new CitationCRFTrainer(opts.modelFile.value, new DefaultLexicons(lexiconDir))
-
-
-
-//    testDocs.foreach(tagger.process)
-//    tagger.evaluator.printEvaluationSingle(testDocs, "TEST FINAL")
   }
 
   def main(args: Array[String]): Unit = {

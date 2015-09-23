@@ -24,6 +24,7 @@ object IOHelper {
     BinarySerializer.deserialize(CitationLabelDomain, is)
     CitationLabelDomain.freeze()
     logger.info(s"deserialized CitationLabelDomain: ${CitationLabelDomain.dimensionSize} categories")
+    CitationLabelDomain.categories.foreach(println)
     BinarySerializer.deserialize(CitationFeaturesDomain, is)
     CitationFeaturesDomain.freeze()
     logger.info(s"deserialized CitationFeaturesDomain: ${CitationFeaturesDomain.dimensionSize} dimensions")

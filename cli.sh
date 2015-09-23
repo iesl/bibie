@@ -1,5 +1,10 @@
 #!/bin/bash
 
+iters="2"
+rate="1.0"
+
+modelFile="/home/kate/AI2/bibie/bibie.factorie"
+
 mem="16G"
 
 fac="/home/kate/research/factorie/target/factorie_2.11-1.2-SNAPSHOT-nlp-jar-with-dependencies.jar"
@@ -10,8 +15,11 @@ cp="$fac:$jarfile"
 java -Xmx$mem -cp $cp edu.umass.cs.iesl.bibie.Cli \
 --optimizer="lbfgs" \
 --save-model="true" \
---model-file="bibie.factorie" \
+--model-file=$modelFile \
 --train-file="/home/kate/AI2/bibie/umass-citation/training.docs" \
 --dev-file="/home/kate/AI2/bibie/umass-citation/dev.docs" \
 --test-file="/home/kate/AI2/bibie/umass-citation/testing.docs" \
---lexicons="file:///home/kate/AI2/bibie/src/main/resources/lexicons"
+--lexicons="file:///home/kate/AI2/bibie/src/main/resources/lexicons" \
+--adagrad-rate=$rate \
+--num-iterations=$iters
+

@@ -7,6 +7,7 @@ import edu.umass.cs.iesl.bibie._
  *         created on 9/13/15
  */
 class Hyperparams(opts: BibieOptions) {
+  val lexiconUrl = opts.lexiconUrl.value
   val optimizer = opts.optimizer.value
   val rate = opts.rate.value
   val delta = opts.delta.value

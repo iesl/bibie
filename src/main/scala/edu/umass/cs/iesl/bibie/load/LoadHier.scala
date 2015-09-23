@@ -50,7 +50,7 @@ object LoadHier {
           }*/
           if (sentence.length > 0) document.appendString(" ")
           val token = new Token(sentence, t)
-          token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(tag)) tag else "O", token)
+          token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(tag)) tag else "", token)
           tags.foreach {t => tags(t._1) = (t._2._1, t._2._2 + 1)}
         }
       }

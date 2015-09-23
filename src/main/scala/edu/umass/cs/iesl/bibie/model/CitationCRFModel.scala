@@ -61,7 +61,8 @@ class CitationCRFModel(lexicons: Lexicons) extends TemplateModel with Parameters
   /* infrastructure for evaluation */
   val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
   def evaluate(docs: Seq[Document], extra: String = ""): Double = {
-    evaluator.printEvaluationSingle(docs, extraText = extra)
+    evaluator.printEvaluation(docs, extra = extra)
+    evaluator.segmentationEvaluation(docs, extra = extra)
   }
 
 
