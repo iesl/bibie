@@ -38,9 +38,12 @@ class Features(val lexicons: Lexicons) {
 
   // TODO: add some global features to baseline CRF - like "containsthesis"
   def wordToFeatures(token: Token): Unit = {
-    val features = new CitationFeatures(token)
-    val preFeats = token.attr[PreFeatures]
-    if(preFeats != null) features ++= preFeats.features
+    val features = token.attr[CitationFeatures]
+    assert(features != null, "token has no attr CitationFeatures")
+//    val features = new CitationFeatures(token)
+//    val preFeats = token.attr[PreFeatures]
+//    if(preFeats != null) features ++= preFeats.features
+    assert(token.document.attr[CitationSpanList] != null, "OverSegmenter has not been run on this document yet (token.document lacks attr CitationSpanList)")
     val docSpans = token.document.attr[CitationSpanList].spans
     val word = token.string
     val email = """([\w\d\-\_]+)(\+\d+)?@([\w\d\-\.]+)"""

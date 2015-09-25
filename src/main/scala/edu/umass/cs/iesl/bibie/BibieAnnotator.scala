@@ -18,7 +18,14 @@ class BibieAnnotator(model: CitationCRFModel, lexiconUrlBase: String) extends Do
 
   private val logger = Logger.getLogger(getClass.getName)
 
-  val segmenter = new OverSegmenterAnnotator(lexiconUrlBase)
+  lazy val segmenter = new OverSegmenterAnnotator(lexiconUrlBase)
+
+  def processDocs(docs: Seq[Document]): Seq[Document] = {
+    if (docs.head.attr[CitationSpanList] == null) {
+      OverSegmenter.overSegment(docs, lexiconUrlBase)
+    }
+    docs.map(process)
+  }
 
   override def process(document: Document): Document = {
     if (document.tokenCount == 0) return document
@@ -53,9 +60,78 @@ class BibieAnnotator(model: CitationCRFModel, lexiconUrlBase: String) extends Do
     val buff = new CitationSpanBuffer
     buff ++= makeCitationSpans(document)
     document.attr += buff
-    logger.info(s" ** done with: ${document.name} ** ")
     document
   }
+
+  def processGrobid(document: Document): Document = {
+    if (document.tokenCount == 0) return document
+    if (document.tokens.head.attr[CitationFeatures] == null) {
+      model.computeDocumentFeaturesGrobid(document, training = false)
+    }
+    document.tokens.foreach { token =>
+      if (token.attr[CitationLabel] == null) {
+        token.attr += new CitationLabel("", token)
+      }
+    }
+    //TODO set labels randomly here?
+    val sentenceIter = document.sentences.toIterator
+    while (sentenceIter.hasNext) {
+      val sentence = sentenceIter.next()
+      if (sentence.length > 0) {
+        val vars = sentence.tokens.map(_.attr[CitationLabel]).toSeq
+        val sum = CitationBIOHelper.infer(vars, model)
+        sum.setToMaximize(null)
+      }
+    }
+//    // remove features
+//    document.tokens.foreach { token =>
+//      if (token.attr[CitationFeatures] != null) {
+//        token.attr.remove[CitationFeatures]
+//      }
+//    }
+//    // add CitationSpanBuffer
+//    val buff = new CitationSpanBuffer
+//    buff ++= makeCitationSpans(document)
+//    document.attr += buff
+    document
+  }
+
+  def processBoth(document: Document): Document = {
+    if (document.tokenCount == 0) return document
+    if (document.attr[CitationSpanList] == null) {
+      segmenter.process(document)
+    }
+    if (document.tokens.head.attr[CitationFeatures] == null) {
+      model.computeDocumentFeaturesBoth(document, training = false)
+    }
+    document.tokens.foreach { token =>
+      if (token.attr[CitationLabel] == null) {
+        token.attr += new CitationLabel("", token)
+      }
+    }
+    //TODO set labels randomly here?
+    val sentenceIter = document.sentences.toIterator
+    while (sentenceIter.hasNext) {
+      val sentence = sentenceIter.next()
+      if (sentence.length > 0) {
+        val vars = sentence.tokens.map(_.attr[CitationLabel]).toSeq
+        val sum = CitationBIOHelper.infer(vars, model)
+        sum.setToMaximize(null)
+      }
+    }
+    //    // remove features
+    //    document.tokens.foreach { token =>
+    //      if (token.attr[CitationFeatures] != null) {
+    //        token.attr.remove[CitationFeatures]
+    //      }
+    //    }
+    //    // add CitationSpanBuffer
+    //    val buff = new CitationSpanBuffer
+    //    buff ++= makeCitationSpans(document)
+    //    document.attr += buff
+    document
+  }
+
 
   /**
    * Same as process(), but don't remove features from tokens. Method to be called during training for evaluation

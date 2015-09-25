@@ -58,6 +58,57 @@ class CitationCRFModel(lexicons: Lexicons) extends TemplateModel with Parameters
     }
   }
 
+  def computeDocumentFeaturesGrobid(doc: Document, training: Boolean): Unit = {
+    if (training) {
+      val sentenceIter = doc.sentences.toIterator
+      while (sentenceIter.hasNext) {
+        val sentence = sentenceIter.next()
+        if (sentence.size > 0) {
+          computeTokenFeaturesGrobid(sentence)
+        }
+      }
+    } else {
+      doc.sentences.filter(_.size > 0).par.foreach { sentence =>
+        computeTokenFeaturesGrobid(sentence)
+      }
+    }
+  }
+
+  def computeTokenFeaturesGrobid(sentence: Sentence): Unit = {
+    sentence.tokens.foreach { token =>
+      val features = new CitationFeatures(token)
+      if (token.attr[PreFeatures] != null) {
+        features ++= token.attr[PreFeatures].features
+      }
+      token.attr += features
+    }
+  }
+
+  def computeDocumentFeaturesBoth(doc: Document, training: Boolean): Unit = {
+    if (training) {
+      val sentenceIter = doc.sentences.toIterator
+      while (sentenceIter.hasNext) {
+        val sentence = sentenceIter.next()
+        if (sentence.size > 0) {
+          computeTokenFeaturesBoth(sentence)
+        }
+      }
+    } else {
+      doc.sentences.filter(_.size > 0).par.foreach { sentence =>
+        computeTokenFeaturesBoth(sentence)
+      }
+    }
+    featureBuilder.initSentenceFeatures(doc)
+  }
+
+  def computeTokenFeaturesBoth(sentence: Sentence): Unit = {
+    sentence.tokens.foreach { token =>
+      token.attr += new CitationFeatures(token)
+      featureBuilder.wordToFeatures(token)
+      token.attr[CitationFeatures] ++= token.attr[PreFeatures].features
+    }
+  }
+
   /* infrastructure for evaluation */
   val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
   def evaluate(docs: Seq[Document], extra: String = ""): Double = {

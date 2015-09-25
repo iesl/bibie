@@ -11,6 +11,7 @@ import scala.io.StdIn
 import scala.collection.mutable
 
 import java.util.logging.Logger
+import java.time
 
 /**
  * @author Kate Silverstein 
@@ -36,31 +37,61 @@ object Cli {
     var text = StdIn.readLine()
     while (text != null) {
       logger.info(text)
-      text match {
-        case "load" => loadDocs()
-        case "load-model" => loadModel()
+      val parts = text.split(" ")
+      if (parts.length == 1) {
+        val arg1 = parts.head
+        arg1 match {
+          case "load" => loadDocs()
+          case "load-model" => loadModel()
 
-        case "curr" => printDoc()
-        case "next" =>
-          if (state.idx < state.docs.length - 1) state.idx += 1
-          printDoc()
-        case "prev" =>
-          if (state.idx > 0) state.idx -= 1
-          printDoc()
+          case "curr" => printDoc()
+          case "next" =>
+            if (state.idx < state.docs.length - 1) state.idx += 1
+            printDoc()
+          case "prev" =>
+            if (state.idx > 0) state.idx -= 1
+            printDoc()
 
-        case "xml" => printXML()
-        case "tokens" => printTokens()
-        case "spans" => printSpans()
+          case "xml" => printXML()
+          case "tokens" => printTokens()
+          case "spans" => printSpans()
 
-        case "process" => processDocs()
-        case "eval" => evaluate()
+          case "process" => processDocs()
+          case "eval" => evaluate()
 
-        case "segment" => oversegment()
-        case "train" => TrainCitationModel.trainModel(opts)
-        case "test" => TestCitationModel.testModel(opts)
+          case "segment" => oversegment()
 
-        case "quit" => System.exit(0)
-        case _ => println("???")
+//          //train on umass-citation dataset
+//          case "train" => TrainCitationModel.trainModel(opts)
+//          case "test" => TestCitationModel.testModel(opts)
+//
+//          // train on grobid dataset
+//          case "train-grobid-using-umass-features" => TrainCitationModel.trainModelUmassFeatures(opts)
+//          case "train-grobid-using-grobid-features" => TrainCitationModel.trainModelGrobidFeaturesOnly(opts)
+//          case "train-grobid-using-both" => TrainCitationModel.trainModelBothFeatureSets(opts)
+
+          case "quit" => System.exit(0)
+          case _ => println("???")
+        }
+      } else if (parts.length == 3) {
+        val arg1 = parts(0)
+        val arg2 = parts(1)
+        val arg3 = parts(2)
+        arg1 match {
+          case "train" =>
+            opts.dataSet.setValue(arg2)
+            opts.featureSet.setValue(arg3)
+            val dateStr: String = {
+              val d = time.LocalDateTime.now()
+              d.toString.replaceAll(":", "_")
+            }
+            val modelName = s"${opts.rootPath.value}/bibie.factorie.$arg2.$arg3.$dateStr"
+            opts.modelFile.setValue(modelName)
+            logger.info(s"dataSet: $arg2, featureSet: $arg3, modelName: $modelName")
+            TrainCitationModel.run(opts)
+        }
+      } else {
+        println(s"invalid: $text")
       }
       print("> ")
       text = StdIn.readLine()

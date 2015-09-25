@@ -9,7 +9,7 @@ import cc.factorie.{random, _}
 
 import edu.umass.cs.iesl.bibie._
 import edu.umass.cs.iesl.bibie.evaluate.SegmentationEvaluation
-import edu.umass.cs.iesl.bibie.load.{LoadHier, PreFeatures, IOHelper}
+import edu.umass.cs.iesl.bibie.load.{LoadHier, PreFeatures, IOHelper, LoadGrobid}
 import edu.umass.cs.iesl.bibie.segment._
 import edu.umass.cs.iesl.bibie.util.{DefaultLexicons, Lexicons}
 
@@ -106,6 +106,102 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
     model.evaluate(testDocuments, "DEV (FINAL)")
   }
 
+  def trainUsingGrobidFeatures(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams)(implicit random: scala.util.Random): Double = {
+    // generate features
+    computeDocumentsFeaturesGrobid(trainDocuments, training = true)
+    println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
+    CitationFeaturesDomain.freeze()
+    computeDocumentsFeaturesGrobid(testDocuments, training = false)
+
+    // todo feature count cutoff?
+
+    // Get the variables to be inferred (for now, just operate on a subset)
+    val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel])
+    val testLabels: Seq[CitationLabel] = testDocuments.flatMap(_.tokens).map(_.attr[CitationLabel])
+    (trainLabels ++ testLabels).filter(_ != null).foreach(_.setRandomly(random))
+    val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])
+    val examples = vars.map(v => new LikelihoodExample(v.toSeq, model, cc.factorie.infer.InferByBPChain))
+    val annotator = new BibieAnnotator(model, params.lexiconUrl)
+
+    def evaluate(): Unit = {
+      trainDocuments.foreach(annotator.processGrobid)
+      testDocuments.foreach(annotator.processGrobid)
+      model.evaluate(trainDocuments, "TRAINING")
+      model.evaluate(testDocuments, "DEV")
+    }
+
+    params.optimizer match {
+      case "lbfgs" =>
+        val optimizer = new LBFGS with L2Regularization
+        val trainer = new ThreadLocalBatchTrainer(model.parameters, optimizer)
+        logger.info("training with LBFGS ...")
+        trainer.trainFromExamples(examples)
+      case "adagrad" =>
+        val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
+        logger.info("training with AdaGradRDA ...")
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer, logEveryN=2)
+      case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
+    }
+
+    (trainLabels ++ testLabels).foreach(_.setRandomly(random))
+    trainDocuments.foreach(annotator.processGrobid)
+    testDocuments.foreach(annotator.processGrobid)
+    val tot = model.parameters.tensors.sumInts(t => t.toSeq.count(x => x == 0)).toFloat
+    val len = model.parameters.tensors.sumInts(_.length)
+    val sparsity = tot / len
+    logger.info(s"model sparsity: $sparsity")
+    model.evaluate(trainDocuments, "TRAINING (FINAL)")
+    model.evaluate(testDocuments, "DEV (FINAL)")
+  }
+
+  def trainUsingBothFeatureSets(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams)(implicit random: scala.util.Random): Double = {
+    // generate features
+    computeDocumentsFeaturesBoth(trainDocuments, training = true)
+    println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
+    CitationFeaturesDomain.freeze()
+    computeDocumentsFeaturesBoth(testDocuments, training = false)
+
+    // todo feature count cutoff?
+
+    // Get the variables to be inferred (for now, just operate on a subset)
+    val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel])
+    val testLabels: Seq[CitationLabel] = testDocuments.flatMap(_.tokens).map(_.attr[CitationLabel])
+    (trainLabels ++ testLabels).filter(_ != null).foreach(_.setRandomly(random))
+    val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])
+    val examples = vars.map(v => new LikelihoodExample(v.toSeq, model, cc.factorie.infer.InferByBPChain))
+    val annotator = new BibieAnnotator(model, params.lexiconUrl)
+
+    def evaluate(): Unit = {
+      trainDocuments.foreach(annotator.processBoth)
+      testDocuments.foreach(annotator.processBoth)
+      model.evaluate(trainDocuments, "TRAINING")
+      model.evaluate(testDocuments, "DEV")
+    }
+
+    params.optimizer match {
+      case "lbfgs" =>
+        val optimizer = new LBFGS with L2Regularization
+        val trainer = new ThreadLocalBatchTrainer(model.parameters, optimizer)
+        logger.info("training with LBFGS ...")
+        trainer.trainFromExamples(examples)
+      case "adagrad" =>
+        val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
+        logger.info("training with AdaGradRDA ...")
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer, logEveryN=2)
+      case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
+    }
+
+    (trainLabels ++ testLabels).foreach(_.setRandomly(random))
+    trainDocuments.foreach(annotator.processBoth)
+    testDocuments.foreach(annotator.processBoth)
+    val tot = model.parameters.tensors.sumInts(t => t.toSeq.count(x => x == 0)).toFloat
+    val len = model.parameters.tensors.sumInts(_.length)
+    val sparsity = tot / len
+    logger.info(s"model sparsity: $sparsity")
+    model.evaluate(trainDocuments, "TRAINING (FINAL)")
+    model.evaluate(testDocuments, "DEV (FINAL)")
+  }
+
 //  /* Assumes features are already computed */
 //  def predict(document: Document): Document = {
 //    for (sentence <- document.sentences if sentence.tokens.size > 0) {
@@ -130,7 +226,36 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
     }
   }
 
-//  def computeDocumentFeatures(document: Document) = {
+  def computeDocumentsFeaturesGrobid(documents: Seq[Document], training: Boolean = false) = {
+    if (training) {
+      var i = 0
+      while (i < documents.length) {
+        model.computeDocumentFeaturesGrobid(documents(i), training = true)
+        i += 1
+      }
+    } else {
+      documents.par.foreach { document =>
+        model.computeDocumentFeaturesGrobid(document, training = false)
+      }
+    }
+  }
+
+  def computeDocumentsFeaturesBoth(documents: Seq[Document], training: Boolean = false) = {
+    if (training) {
+      var i = 0
+      while (i < documents.length) {
+        model.computeDocumentFeaturesBoth(documents(i), training = true)
+        i += 1
+      }
+    } else {
+      documents.par.foreach { document =>
+        model.computeDocumentFeaturesBoth(document, training = false)
+      }
+    }
+  }
+
+
+  //  def computeDocumentFeatures(document: Document) = {
 //    for (sentence <- document.sentences if sentence.tokens.size > 0) computeTokenFeatures(sentence)
 //    initSentenceFeatures(document)
 //  }
@@ -178,6 +303,9 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
 //  }
 }
 
+
+case class ExperimentId(dataSet: String, featureSet: String)
+
 // TODO: implement DocumentAnnotator to add citations
 object TrainCitationModel extends HyperparameterMain {
 
@@ -188,8 +316,8 @@ object TrainCitationModel extends HyperparameterMain {
     val params = new Hyperparams(opts)
     val lexiconDir = opts.lexiconUrl.value
     val trainer = new CitationCRFTrainer(new DefaultLexicons(lexiconDir))
-    val trainDocs = LoadHier.fromFile(opts.trainFile.value).take(100)
-    val devDocs = LoadHier.fromFile(opts.devFile.value).take(50)
+    val trainDocs = LoadHier.fromFile(opts.trainFile.value)
+    val devDocs = LoadHier.fromFile(opts.devFile.value)
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
     val trainEval = trainer.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
@@ -205,33 +333,73 @@ object TrainCitationModel extends HyperparameterMain {
     trainEval
   }
 
+  def trainModelGrobidFeaturesOnly(opts: BibieOptions): Double = {
+    implicit val random = new scala.util.Random(0)
+    val params = new Hyperparams(opts)
+    val lexiconDir = opts.lexiconUrl.value
+    val trainer = new CitationCRFTrainer(new DefaultLexicons(lexiconDir))
+    val trainDocs = LoadGrobid.fromFilename(opts.trainFile.value)
+    val testDocs = LoadGrobid.fromFilename(opts.testFile.value)
+    val trainEval = trainer.trainUsingGrobidFeatures(trainDocs, testDocs, params)
+    logger.info(s"train eval: $trainEval")
+    if (opts.saveModel.value) {
+      logger.info(s"serializing model to ${opts.modelFile.value}")
+      IOHelper.serializeModel(opts.modelFile.value, trainer.model)
+    }
+    trainEval
+  }
+
+  def trainModelBothFeatureSets(opts: BibieOptions): Double = {
+    implicit val random = new scala.util.Random(0)
+    val params = new Hyperparams(opts)
+    val lexiconDir = opts.lexiconUrl.value
+    val trainer = new CitationCRFTrainer(new DefaultLexicons(lexiconDir))
+    val trainDocs = LoadGrobid.fromFilename(opts.trainFile.value)
+    val testDocs = LoadGrobid.fromFilename(opts.testFile.value)
+    OverSegmenter.overSegment(trainDocs ++ testDocs, lexiconDir)
+    val trainEval = trainer.trainUsingBothFeatureSets(trainDocs, testDocs, params)
+    logger.info(s"train eval: $trainEval")
+    if (opts.saveModel.value) {
+      logger.info(s"serializing model to ${opts.modelFile.value}")
+      IOHelper.serializeModel(opts.modelFile.value, trainer.model)
+    }
+    trainEval
+  }
+
+  def trainModelUmassFeatures(opts: BibieOptions): Double = {
+    implicit val random = new scala.util.Random(0)
+    val params = new Hyperparams(opts)
+    val lexiconDir = opts.lexiconUrl.value
+    val trainer = new CitationCRFTrainer(new DefaultLexicons(lexiconDir))
+    val trainDocs = LoadGrobid.fromFilename(opts.trainFile.value)
+    val testDocs = LoadGrobid.fromFilename(opts.testFile.value)
+    OverSegmenter.overSegment(trainDocs ++ testDocs, lexiconDir)
+    val trainEval = trainer.train(trainDocs, testDocs, params)
+    logger.info(s"train eval: $trainEval")
+    if (opts.saveModel.value) {
+      logger.info(s"serializing model to ${opts.modelFile.value}")
+      IOHelper.serializeModel(opts.modelFile.value, trainer.model)
+    }
+    trainEval
+  }
+
   def evaluateParameters(args: Array[String]): Double = {
     println(args.mkString(", "))
     val opts = new BibieOptions
     opts.parse(args)
     trainModel(opts)
+  }
 
-//    val allTrainingData = opts.dataset.value match {
-//      case "grobid" => LoadGrobid.fromFilename(opts.trainFile.value, withFeatures=opts.useGrobidFeatures.value)
-//      case _ => LoadHier.fromFile(opts.trainFile.value)
-//    }
-//
-//    val trainPortion = (allTrainingData.length.toDouble * opts.trainPortion.value).floor.toInt
-//    val devPortion = (allTrainingData.length.toDouble * opts.testPortion.value).floor.toInt
-//    val trainingData = allTrainingData.take(trainPortion)
-//    val devData = allTrainingData.drop(trainPortion).take(devPortion)
-//
-//    println("Training: " + trainingData.size + " Dev: " + devData.size)
-//
-//    OverSegmenter.overSegment(trainingData ++ devData, lexiconDir) // todo do this in loader?
-//
-//    val f0 = tagger.train(trainingData, devData, params)
-//
-//    if (opts.saveModel.value) tagger.serialize(new FileOutputStream(opts.modelFile.value))
-//
-//    if(opts.testFile.wasInvoked) TestCitationModel.main(args)
-//
-//    f0
+  def run(opts: BibieOptions): Double = {
+    println(opts.unParse.mkString(" "))
+    val id = ExperimentId(opts.dataSet.value, opts.featureSet.value)
+    id match {
+      case ExperimentId(DATA_GROBID, FEATURES_GROBID) => trainModelGrobidFeaturesOnly(opts)
+      case ExperimentId(DATA_GROBID, FEATURES_UMASS) => trainModelUmassFeatures(opts)
+      case ExperimentId(DATA_GROBID, FEATURES_BOTH) => trainModelBothFeatureSets(opts)
+      case ExperimentId(DATA_UMASS, FEATURES_UMASS) => trainModel(opts)
+      case _ => throw new Exception(s"bad dataSet or featureSet option: ${opts.dataSet.value}, ${opts.featureSet.value}")
+    }
   }
 }
 

@@ -3,7 +3,17 @@
 iters="2"
 rate="1.0"
 
-modelFile="/home/kate/AI2/bibie/bibie.factorie"
+root="/home/kate/AI2/bibie"
+
+modelFile="$root/bibie.factorie.grobid"
+
+#trainFile="$root/umass-citation/training.docs"
+#devFile="$root/umass-citation/dev.docs"
+#testFile="$root/umass-citation/testing.docs"
+
+trainFile="/home/kate/AI2/bibie/grobid/citation8947890140946357789.train"
+devFile=""
+testFile="/home/kate/AI2/bibie/grobid/citation5106663471313568163.test"
 
 mem="16G"
 
@@ -15,10 +25,11 @@ cp="$fac:$jarfile"
 java -Xmx$mem -cp $cp edu.umass.cs.iesl.bibie.Cli \
 --optimizer="lbfgs" \
 --save-model="true" \
+--root-path=$root \
 --model-file=$modelFile \
---train-file="/home/kate/AI2/bibie/umass-citation/training.docs" \
---dev-file="/home/kate/AI2/bibie/umass-citation/dev.docs" \
---test-file="/home/kate/AI2/bibie/umass-citation/testing.docs" \
+--train-file=$trainFile \
+--dev-file=$devFile \
+--test-file=$testFile \
 --lexicons="file:///home/kate/AI2/bibie/src/main/resources/lexicons" \
 --adagrad-rate=$rate \
 --num-iterations=$iters
