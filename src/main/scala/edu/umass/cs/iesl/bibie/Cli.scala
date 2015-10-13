@@ -2,9 +2,10 @@ package edu.umass.cs.iesl.bibie
 
 import cc.factorie.util._
 import cc.factorie.app.nlp.Document
+import cc.factorie.app.chain.SegmentEvaluation
 
 import edu.umass.cs.iesl.bibie.model._
-import edu.umass.cs.iesl.bibie.load.IOHelper
+import edu.umass.cs.iesl.bibie.load.{LoadGrobid, IOHelper}
 import edu.umass.cs.iesl.bibie.segment.{OverSegmenter, CitationSpanList}
 
 import scala.io.StdIn
@@ -12,6 +13,7 @@ import scala.collection.mutable
 
 import java.util.logging.Logger
 import java.time
+import edu.umass.cs.iesl.bibie.evaluate.SegmentationEvaluation
 
 /**
  * @author Kate Silverstein 
@@ -61,6 +63,8 @@ object Cli {
 
           case "segment" => oversegment()
 
+          case "quick" => quickTest()
+
 //          //train on umass-citation dataset
 //          case "train" => TrainCitationModel.trainModel(opts)
 //          case "test" => TestCitationModel.testModel(opts)
@@ -89,6 +93,20 @@ object Cli {
             opts.modelFile.setValue(modelName)
             logger.info(s"dataSet: $arg2, featureSet: $arg3, modelName: $modelName")
             TrainCitationModel.run(opts)
+          case "test" =>
+            if (arg2.equals("grobid")) {
+              val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+              state.docs ++= LoadGrobid.fromFilename(opts.testFile.value)
+              loadModel()
+              val ann = new BibieAnnotator(state.model, opts.lexiconUrl.value)
+              state.docs.foreach(ann.processBoth)
+              evaluator.printEvaluation(state.docs, "UMASS")
+              evaluator.segmentationEvaluation(state.docs, "UMASS (SegmentationEvaluation)")
+            } else {
+              throw new Exception("not supported yet")
+            }
+
+
         }
       } else {
         println(s"invalid: $text")
@@ -96,6 +114,41 @@ object Cli {
       print("> ")
       text = StdIn.readLine()
     }
+  }
+
+  def quickTest(): Unit = {
+    implicit val random = new scala.util.Random(0)
+    val fname = "/home/kate/AI2/bibie/grobid-results.txt"
+    val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+
+    if (state.model == null) loadModel()
+    state.docs.clear()
+
+    state.docs ++= LoadGrobid.fromFilenameWithGrobidResults(fname)
+    val labels = state.docs.flatMap(_.tokens.map(_.attr[CitationLabel]))
+    val eval = new SegmentEvaluation[CitationLabel]("B-", "I-", CitationLabelDomain, labels.toIndexedSeq)
+    println(eval)
+    val t = eval("author")
+    println(t.f1)
+//    state.docs.foreach { doc =>
+//      doc.tokens.foreach { token =>
+//        val label = token.attr[CitationLabel]
+//        token.attr.remove[CitationLabel]
+//        val newLabel = new CitationLabel(label.target.categoryValue, token)
+//        token.attr += newLabel
+//      }
+//    }
+//    val ann = new BibieAnnotator(state.model, opts.lexiconUrl.value)
+//    state.docs.foreach(ann.processGrobid)
+//    evaluator.printEvaluation(state.docs, "UMASS")
+//    evaluator.segmentationEvaluation(state.docs, "UMASS (SegmentationEvaluation)")
+//    println("")
+//
+//    val docs = LoadGrobid.fromFilenameWithGrobidResults(fname)
+//    evaluator.printEvaluation(docs, "GROBID")
+//    evaluator.segmentationEvaluation(docs, "GROBID (SegmentationEvaluation)")
+
+
   }
 
   def processDocs(): Unit = {

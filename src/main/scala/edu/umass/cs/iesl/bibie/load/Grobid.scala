@@ -41,6 +41,82 @@ oka oka o ok oka oka a ka oka oka LINEIN NOCAPS NODIGIT 0 1 0 0 0 0 0 0 0 0 0 0 
  */
 
 object LoadGrobid {
+
+  def line2features(line: String): Array[String] = {
+    Array()
+  }
+
+  def fromFilenameWithGrobidResults(filename: String): Seq[Document] = {
+
+    def cleanLabel(label: String): String = {
+      val clean = label.dropRight(1) //take off the ending bracket
+      val result = if (clean.startsWith("I-<")) {
+          val newLabel = clean.drop(3)
+          "B-" + newLabel
+        } else {
+          val newLabel = clean.drop(1)
+          "I-" + newLabel
+        }
+      result
+    }
+
+    println(s"Loading data from $filename ...")
+    val whitespace = "\\s+".r
+    val buff = new ArrayBuffer[Document]()
+    var currDoc = new Document("")
+    var currSent = new Sentence(currDoc)
+    val lines = Source.fromFile(filename).getLines()
+    var tokenCount = 0
+    var docCount = 0
+
+    var printCount = 0
+
+    while (lines.hasNext) {
+      val line = lines.next()
+      val parts = whitespace.split(line)
+
+      if (parts.length > 1) {
+        val len = parts.length
+        val grobidLabel = parts(len-1)
+        val goldLabel = parts(len-2)
+        val cleanGold = cleanLabel(goldLabel)
+        assert(CitationLabelDomain.categories.contains(cleanGold), s"gold category $cleanGold not in domain")
+
+        val cleanResult = cleanLabel(grobidLabel)
+        assert(CitationLabelDomain.categories.contains(cleanResult), s"result category $cleanResult not in domain")
+
+        val string = parts.head
+        val token = new Token(currSent, string)
+        val tag = new CitationLabel(cleanGold, token)
+        val newIdx = CitationLabelDomain.index(cleanResult)
+        tag.set(newIdx)(null)
+        token.attr += tag
+
+        val featureParts = parts.dropRight(2)
+
+        val features = featureParts.zipWithIndex.map{case(f, i) => "G@" + i + "=" + f}
+        token.attr += new PreFeatures(features, token)
+
+        tokenCount += 1
+
+      } else { //found a new citation
+        if (currSent.length > 0) currDoc.appendString("")
+        if (currDoc.tokenCount > 0) {
+          buff += currDoc
+          currDoc = new Document("")
+          currSent = new Sentence(currDoc)
+          docCount += 1
+        }
+      }
+
+    }
+
+    println(s"Loaded $docCount docs with $tokenCount tokens from file $filename.")
+    buff
+  }
+
+
+
   def fromFilename(filename: String, withFeatures: Boolean = true): Seq[Document] = {
     println(s"Loading data from $filename ...")
     val whitespace = "\\s+".r

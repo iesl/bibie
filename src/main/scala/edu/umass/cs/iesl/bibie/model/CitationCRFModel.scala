@@ -27,6 +27,7 @@ class CitationCRFModel(lexicons: Lexicons) extends TemplateModel with Parameters
     def unroll1(label: CitationLabel) = if (label.token.sentenceHasPrev) Factor(label.token.sentencePrev.attr[CitationLabel], label) else Nil
     def unroll2(label: CitationLabel) = if (label.token.sentenceHasNext) Factor(label, label.token.sentenceNext.attr[CitationLabel]) else Nil
   }
+
   this += localTemplate
   this += transitionTemplate
   def sparsity = parameters.tensors.sumInts(t => t.toSeq.count(x => x == 0)).toFloat / parameters.tensors.sumInts(_.length)
@@ -112,8 +113,8 @@ class CitationCRFModel(lexicons: Lexicons) extends TemplateModel with Parameters
   /* infrastructure for evaluation */
   val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
   def evaluate(docs: Seq[Document], extra: String = ""): Double = {
-    evaluator.printEvaluation(docs, extra = extra)
     evaluator.segmentationEvaluation(docs, extra = extra)
+    evaluator.printEvaluation(docs, extra = extra)
   }
 
 

@@ -35,6 +35,8 @@ package object bibie {
     val featureSet = new CmdOption[String]("feature-set", "", "STRING", "which feature set to use: grobid|umass|both (note: if dataSet==umass-citation, umass features will be used)")
 
     /* training hyperparameters */
+    val useCrossValidation = new CmdOption[Boolean]("use-cross-validation", false, "BOOLEAN", "use cross validation")
+    val nFolds = new CmdOption[Int]("n-folds", 5, "INT", "# folds to use in cross validation")
     val optimizer = new CmdOption[String]("optimizer", "lbfgs", "STRING", "lbfgs|adagrad")
     val rate = new CmdOption("adagrad-rate", 0.35548827391837345, "FLOAT", "Adagrad learning rate.")
     val delta = new CmdOption("adagrad-delta", 1.9033917145173614E-6, "FLOAT", "Adagrad delta (ridge).")

@@ -91,7 +91,7 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
       case "adagrad" =>
         val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
         logger.info("training with AdaGradRDA ...")
-        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer, logEveryN=2)
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer)
       case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
     }
 
@@ -139,7 +139,7 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
       case "adagrad" =>
         val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
         logger.info("training with AdaGradRDA ...")
-        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer, logEveryN=2)
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer)
       case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
     }
 
@@ -187,7 +187,7 @@ class CitationCRFTrainer(val lexicons: Lexicons) {
       case "adagrad" =>
         val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
         logger.info("training with AdaGradRDA ...")
-        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer, logEveryN=2)
+        Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer)
       case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
     }
 
@@ -334,6 +334,7 @@ object TrainCitationModel extends HyperparameterMain {
   }
 
   def trainModelGrobidFeaturesOnly(opts: BibieOptions): Double = {
+    logger.info(" ** trainModelGrobidFeaturesOnly **")
     implicit val random = new scala.util.Random(0)
     val params = new Hyperparams(opts)
     val lexiconDir = opts.lexiconUrl.value
@@ -346,6 +347,24 @@ object TrainCitationModel extends HyperparameterMain {
       logger.info(s"serializing model to ${opts.modelFile.value}")
       IOHelper.serializeModel(opts.modelFile.value, trainer.model)
     }
+
+    //val fname = "/home/kate/AI2/bibie/grobid-results.txt"
+    val fname = "/iesl/canvas/ksilvers/bibie-exec/grobid-results.txt"
+    val evalDocs = LoadGrobid.fromFilenameWithGrobidResults(fname)
+    evalDocs.foreach { doc =>
+      doc.tokens.foreach { token =>
+        val label = token.attr[CitationLabel]
+        token.attr.remove[CitationLabel]
+        val newLabel = new CitationLabel(label.target.categoryValue, token)
+        token.attr += newLabel
+      }
+    }
+    val ann = new BibieAnnotator(trainer.model, opts.lexiconUrl.value)
+    evalDocs.foreach(ann.processGrobid)
+    val eval = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+    eval.printEvaluation(evalDocs, "UMASS")
+    eval.segmentationEvaluation(evalDocs, "UMASS (SegmentationEvaluation)")
+
     trainEval
   }
 
@@ -387,7 +406,15 @@ object TrainCitationModel extends HyperparameterMain {
     println(args.mkString(", "))
     val opts = new BibieOptions
     opts.parse(args)
-    trainModel(opts)
+    println(opts.unParse.mkString(" "))
+    val id = ExperimentId(opts.dataSet.value, opts.featureSet.value)
+    id match {
+      case ExperimentId(DATA_GROBID, FEATURES_GROBID) => trainModelGrobidFeaturesOnly(opts)
+      case ExperimentId(DATA_GROBID, FEATURES_UMASS) => trainModelUmassFeatures(opts)
+      case ExperimentId(DATA_GROBID, FEATURES_BOTH) => trainModelBothFeatureSets(opts)
+      case ExperimentId(DATA_UMASS, FEATURES_UMASS) => trainModel(opts)
+      case _ => throw new Exception(s"bad dataSet or featureSet option: ${opts.dataSet.value}, ${opts.featureSet.value}")
+    }
   }
 
   def run(opts: BibieOptions): Double = {
@@ -458,7 +485,7 @@ object OptimizeCitationModel {
     val l2 = HyperParameter(opts.l2, new LogUniformDoubleSampler(1e-6, 1))
     val rate = HyperParameter(opts.rate, new LogUniformDoubleSampler(1e-4, 1))
     val delta = HyperParameter(opts.delta, new LogUniformDoubleSampler(1e-4, 1))
-    val qs = new QSubExecutor(10, "edu.umass.cs.iesl.bibie.TrainCitationModel")
+    val qs = new QSubExecutor(10, "edu.umass.cs.iesl.bibie.model.TrainCitationModel")
     val optimizer = new HyperParameterSearcher(opts, Seq(l1, l2, rate, delta), qs.execute, 200, 180, 60)
     val result = optimizer.optimize()
     println("Got results: " + result.mkString(" "))
