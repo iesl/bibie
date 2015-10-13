@@ -30,9 +30,11 @@ package object bibie {
     val modelFile = new CmdOption[String]("model-file", "bibie.factorie", "STRING", "file to save model to or load model from")
     val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "path to lexicon files")
 
+    val taggerType = new CmdOption[String]("tagger-type", "default", "STRING", "tagger type: grobid|default|combined")
+
     /* experiment id */
-    val dataSet = new CmdOption[String]("data-set", "", "STRING", "which data set to use: grobid|umass-citation")
-    val featureSet = new CmdOption[String]("feature-set", "", "STRING", "which feature set to use: grobid|umass|both (note: if dataSet==umass-citation, umass features will be used)")
+//    val dataSet = new CmdOption[String]("data-set", "", "STRING", "which data set to use: grobid|umass-citation")
+//    val featureSet = new CmdOption[String]("feature-set", "", "STRING", "which feature set to use: grobid|umass|both (note: if dataSet==umass-citation, umass features will be used)")
 
     /* training hyperparameters */
     val useCrossValidation = new CmdOption[Boolean]("use-cross-validation", false, "BOOLEAN", "use cross validation")
