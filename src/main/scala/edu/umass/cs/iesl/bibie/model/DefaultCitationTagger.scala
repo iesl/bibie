@@ -5,21 +5,24 @@ package edu.umass.cs.iesl.bibie.model
  */
 
 import java.net.URL
+import java.util.logging.Logger
 
 import cc.factorie.app.nlp._
 import edu.umass.cs.iesl.bibie.util.DefaultLexicons
 
 class DefaultCitationTagger(lexiconPath: String) extends AbstractCitationTagger {
 
+  private val logger = Logger.getLogger(getClass.getName)
+
   /* Deserialize this tagger from the model at the given URL */
   def this(lexiconPath: String, url:java.net.URL) = {
     this(lexiconPath)
     if (url != null) {
       deserialize(url.openConnection.getInputStream)
-      println("Found model")
+      logger.info(s"loaded model from ${url.getPath}")
     }
     else {
-      println("model not found")
+      logger.info(s"model not found at ${url.getPath}")
     }
   }
 
@@ -53,11 +56,6 @@ class DefaultCitationTagger(lexiconPath: String) extends AbstractCitationTagger 
       }
     }
     featureBuilder.initSentenceFeatures(doc)
-  }
-
-  override def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams)(implicit random: scala.util.Random): Double = {
-    lexicons = new DefaultLexicons(params.lexiconUrl)
-    super.train(trainDocuments, testDocuments, params)
   }
 
 }

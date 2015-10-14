@@ -1,30 +1,33 @@
 package edu.umass.cs.iesl.bibie.model
 
-import java.net.URL
-
 import cc.factorie.app.nlp.{Sentence, Document}
 import edu.umass.cs.iesl.bibie.load.PreFeatures
 import edu.umass.cs.iesl.bibie.util.DefaultLexicons
+
+import java.net.URL
+import java.util.logging.Logger
 
 /**
  * Created by kate on 10/13/15.
  */
 class CombinedCitationTagger(lexiconPath: String) extends AbstractCitationTagger {
 
+  private val logger = Logger.getLogger(getClass.getName)
+
   /* Deserialize this tagger from the model at the given URL */
   def this(lexiconPath: String, url:java.net.URL) = {
     this(lexiconPath)
     if (url != null) {
       deserialize(url.openConnection.getInputStream)
-      println("Found model")
+      logger.info(s"loaded model from ${url.getPath}")
     }
     else {
-      println("model not found")
+      logger.info(s"model not found at ${url.getPath}")
     }
   }
 
   /* Deserialize this tagger from the model at the given path on disk */
-  def this(lexcionPath: String, modelPath: String) = {
+  def this(lexiconPath: String, modelPath: String) = {
     this(lexiconPath, new URL("file://" + modelPath))
   }
 
@@ -59,10 +62,6 @@ class CombinedCitationTagger(lexiconPath: String) extends AbstractCitationTagger
       }
       token.attr += features
     }
-  }
-
-  override def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams)(implicit random: scala.util.Random): Double = {
-    super.train(trainDocuments, testDocuments, params)
   }
 
 }

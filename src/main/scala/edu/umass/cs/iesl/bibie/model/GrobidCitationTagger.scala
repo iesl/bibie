@@ -4,22 +4,25 @@ package edu.umass.cs.iesl.bibie.model
  * Created by kate on 10/13/15.
  */
 
-import java.net.URL
-
 import cc.factorie.app.nlp._
 import edu.umass.cs.iesl.bibie.load.PreFeatures
 
+import java.net.URL
+import java.util.logging.Logger
+
 class GrobidCitationTagger extends AbstractCitationTagger {
+
+  private val logger = Logger.getLogger(getClass.getName)
 
   /* Deserialize this tagger from the model at the given URL */
   def this(url:java.net.URL) = {
     this()
     if (url != null) {
       deserialize(url.openConnection.getInputStream)
-      println("Found model")
+      logger.info(s"loaded model from ${url.getPath}")
     }
     else {
-      println("model not found")
+      logger.info(s"model not found at ${url.getPath}")
     }
   }
 
