@@ -5,7 +5,7 @@ mem="16G"
 dataDir="/iesl/canvas/ksilvers/bibie-exec/data-grobid-24-Sept"
 
 fac="factorie_2.11-1.2-SNAPSHOT-nlp-jar-with-dependencies.jar"
-jarfile="bibie-0.1-SNAPSHOT.jar"
+jarfile="bibie-1.0-SNAPSHOT.jar"
 
 cp="$fac:$jarfile"
 
