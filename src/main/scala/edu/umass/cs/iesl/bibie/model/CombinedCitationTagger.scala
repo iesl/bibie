@@ -35,7 +35,7 @@ class CombinedCitationTagger(lexiconPath: String) extends AbstractCitationTagger
 
   def addFeatures(doc: Document, training: Boolean = false): Unit = {
     computeDocumentFeaturesGrobid(doc, training = training)
-    addFeatures(doc, training = training)
+    addDefaultFeatures(doc, training = training)
   }
 
   def computeDocumentFeaturesGrobid(doc: Document, training: Boolean): Unit = {
@@ -56,12 +56,38 @@ class CombinedCitationTagger(lexiconPath: String) extends AbstractCitationTagger
 
   def computeTokenFeaturesGrobid(sentence: Sentence): Unit = {
     sentence.tokens.foreach { token =>
-      val features = new CitationFeatures(token)
-      if (token.attr[PreFeatures] != null) {
-        features ++= token.attr[PreFeatures].features
+      if (token.attr[CitationFeatures] == null) {
+        token.attr += new CitationFeatures(token)
       }
-      token.attr += features
+      if (token.attr[PreFeatures] != null) {
+        token.attr[CitationFeatures] ++= token.attr[PreFeatures].features
+      }
     }
+  }
+
+  def addDefaultFeatures(doc: Document, training: Boolean = false): Unit = {
+    assert(lexicons != null)
+    val featureBuilder = new Features(lexicons)
+    if (training) {
+      val sentenceIter = doc.sentences.toIterator
+      while (sentenceIter.hasNext) {
+        val sentence = sentenceIter.next()
+        if (sentence.nonEmpty) {
+          sentence.tokens.foreach { token =>
+            if (token.attr[CitationFeatures] == null) token.attr += new CitationFeatures(token)
+            featureBuilder.wordToFeatures(token)
+          }
+        }
+      }
+    } else {
+      doc.sentences.filter(_.nonEmpty).par.foreach { sentence =>
+        sentence.tokens.foreach { token =>
+          if (token.attr[CitationFeatures] == null) token.attr += new CitationFeatures(token)
+          featureBuilder.wordToFeatures(token)
+        }
+      }
+    }
+    featureBuilder.initSentenceFeatures(doc)
   }
 
 }
