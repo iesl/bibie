@@ -9,11 +9,11 @@ import edu.umass.cs.iesl.bibie.util.DefaultLexicons
 /**
  * Created by kate on 10/13/15.
  */
-class CombinedCitationTagger extends AbstractCitationTagger {
+class CombinedCitationTagger(lexiconPath: String) extends AbstractCitationTagger {
 
   /* Deserialize this tagger from the model at the given URL */
-  def this(url:java.net.URL) = {
-    this()
+  def this(lexiconPath: String, url:java.net.URL) = {
+    this(lexiconPath)
     if (url != null) {
       deserialize(url.openConnection.getInputStream)
       println("Found model")
@@ -24,9 +24,11 @@ class CombinedCitationTagger extends AbstractCitationTagger {
   }
 
   /* Deserialize this tagger from the model at the given path on disk */
-  def this(modelPath: String) = {
-    this(new URL("file://" + modelPath))
+  def this(lexcionPath: String, modelPath: String) = {
+    this(lexiconPath, new URL("file://" + modelPath))
   }
+
+  val lexicons: DefaultLexicons = new DefaultLexicons(lexiconPath)
 
   def addFeatures(doc: Document, training: Boolean = false): Unit = {
     computeDocumentFeaturesGrobid(doc, training = training)
@@ -60,7 +62,6 @@ class CombinedCitationTagger extends AbstractCitationTagger {
   }
 
   override def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams)(implicit random: scala.util.Random): Double = {
-    lexicons = new DefaultLexicons(params.lexiconUrl)
     super.train(trainDocuments, testDocuments, params)
   }
 

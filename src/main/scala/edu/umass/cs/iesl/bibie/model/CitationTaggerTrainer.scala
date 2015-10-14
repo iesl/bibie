@@ -35,7 +35,7 @@ object CitationTaggerTrainer extends HyperparameterMain {
     val devDocs = LoadHier.fromFile(opts.devFile.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
-    val tagger = new DefaultCitationTagger
+    val tagger = new DefaultCitationTagger(lexiconDir)
     val trainEval = tagger.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
     if (opts.saveModel.value) {
@@ -67,7 +67,7 @@ object CitationTaggerTrainer extends HyperparameterMain {
     val devDocs = LoadGrobid.fromFilename(opts.devFile.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
-    val tagger = new DefaultCitationTagger
+    val tagger = new CombinedCitationTagger(lexiconDir)
     val trainEval = tagger.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
     if (opts.saveModel.value) {

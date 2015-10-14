@@ -9,11 +9,11 @@ import java.net.URL
 import cc.factorie.app.nlp._
 import edu.umass.cs.iesl.bibie.util.DefaultLexicons
 
-class DefaultCitationTagger extends AbstractCitationTagger {
+class DefaultCitationTagger(lexiconPath: String) extends AbstractCitationTagger {
 
   /* Deserialize this tagger from the model at the given URL */
-  def this(url:java.net.URL) = {
-    this()
+  def this(lexiconPath: String, url:java.net.URL) = {
+    this(lexiconPath)
     if (url != null) {
       deserialize(url.openConnection.getInputStream)
       println("Found model")
@@ -24,9 +24,11 @@ class DefaultCitationTagger extends AbstractCitationTagger {
   }
 
   /* Deserialize this tagger from the model at the given path on disk */
-  def this(modelPath: String) = {
-    this(new URL("file://" + modelPath))
+  def this(lexiconPath: String, modelPath: String) = {
+    this(lexiconPath, new URL("file://" + modelPath))
   }
+
+  val lexicons: DefaultLexicons = new DefaultLexicons(lexiconPath)
 
   def addFeatures(doc: Document, training: Boolean = false): Unit = {
     assert(lexicons != null)

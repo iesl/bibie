@@ -28,7 +28,6 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
   val model = new CitationTaggerCRFModel
   val objective = cc.factorie.variable.HammingObjective
 
-  var lexicons: DefaultLexicons = null
 
   /* DocumentAnnotator methods */
   def process(document: Document): Document = {
