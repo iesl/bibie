@@ -25,12 +25,17 @@ package object bibie {
     val trainFile = new CmdOption("train-file", "", "STRING", "UMass formatted training file.")
     val devFile = new CmdOption("dev-file", "", "STRING", "UMass formatted dev file.")
     val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted test file.")
+
     val rootPath = new CmdOption[String]("root-path", "", "STRING", "path to directory where you want to save things")
+
     val saveModel = new CmdOption[Boolean]("save-model", true, "BOOLEAN", "whether or not to save the model")
     val modelFile = new CmdOption[String]("model-file", "bibie.factorie", "STRING", "file to save model to or load model from")
+
     val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "path to lexicon files")
 
     val taggerType = new CmdOption[String]("tagger-type", "default", "STRING", "tagger type: grobid|default|combined")
+
+    val verbose = new CmdOption[Boolean]("verbose", false, "BOOLEAN", "verbosity")
 
     /* experiment id */
 //    val dataSet = new CmdOption[String]("data-set", "", "STRING", "which data set to use: grobid|umass-citation")

@@ -20,8 +20,7 @@ class GrobidCitationTagger extends AbstractCitationTagger {
     if (url != null) {
       deserialize(url.openConnection.getInputStream)
       logger.info(s"loaded model from ${url.getPath}")
-    }
-    else {
+    } else {
       logger.info(s"model not found at ${url.getPath}")
     }
   }
