@@ -13,7 +13,7 @@ IGNORE_SET = set(['ENTRYTYPE', 'ID'])  # ENTRYYPE e.g. 'article', 'inproceedings
 
 
 def clean_label(label):
-    label = re.sub(r'%\s+', '', label)
+    label = re.sub(r'%\s*', '', label)
     return label
 
 
