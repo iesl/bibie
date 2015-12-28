@@ -579,7 +579,7 @@ def write_embeddings(model_path,
     ematrix = np.zeros((V, hyparams.embedding_dim), dtype=np.float32)
     for char, idx in vmap.items():
         one_hot = np.zeros((1, V), dtype=np.int32)
-        one_hot[idx] = 1.
+        one_hot[:,idx] = 1.
         embedding = lookup(one_hot)
         print char
         print embedding
