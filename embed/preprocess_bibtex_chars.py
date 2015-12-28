@@ -6,6 +6,16 @@ import bibtexparser
 from bibtexparser.bparser import BibTexParser
 from bibtexparser.customization import convert_to_unicode
 import string
+import re
+
+
+IGNORE_SET = set(['ENTRYTYPE', 'ID'])  # ENTRYYPE e.g. 'article', 'inproceedings'; ID e.g. Kate2013
+
+
+def clean_label(label):
+    label = re.sub(r'%\s+', '', label)
+    return label
+
 
 def build_labels_and_vocab(args):
     valid_chars = set([])
@@ -32,6 +42,9 @@ def build_labels_and_vocab(args):
                 continue
             for entry in bib_db.entries:
                 for label, contents in entry.items():
+                    label = clean_label(label)
+                    if label in IGNORE_SET:
+                        continue
                     label_count[label] += 1
                     label_df[f].add(label)
                     for char in list(contents):
@@ -45,6 +58,7 @@ def build_labels_and_vocab(args):
         if i % 300 == 0: # write prelim label/vocab counts because i'm impatient
             cPickle.dump(label_count, open('%s/raw_label_counts_tmp.pkl' % outdir, 'w'))
             cPickle.dump(char_count, open('%s/raw_char_counts_tmp.pkl' % outdir, 'w'))
+            print 'wrote tmp labels/vocab'
 
     print '%d / %d files had errors' % (len(errors), n)
     errors = set(errors)
@@ -103,6 +117,9 @@ def process_files(args):
                 continue
             for entry in bib_db.entries:
                 for label, contents in entry.items():
+                    label = clean_label(label)
+                    if label in IGNORE_SET:
+                        continue
                     if label not in labels:
                         continue
                     label_int = labels[label]
