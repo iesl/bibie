@@ -576,19 +576,22 @@ def write_embeddings(model_path,
     output = layer.get_output(my_embed, X)
     lookup = theano.function([X], output)
 
-    ematrix = np.zeros((V, hyparams.embedding_dim), dtype=np.float32)
+    outf = open(output_file, 'w+')
+
     for char, idx in vmap.items():
         one_hot = np.zeros((1, V), dtype=np.int32)
-        one_hot[:,idx] = 1.
+        one_hot[idx] = 1.
         embedding = lookup(one_hot)
-        print char
-        print embedding
-    #     ematrix[idx] = layer.get_output(embed_layer, inputs=input)
-    # with open(output_file, 'w') as outf:
-    #     for char, idx in vmap.items():
-    #         print ematrix[idx]
-    #         line = '%d\t%s\n' % (idx, ' '.join([str(v) for v in ematrix[idx]]))
-    #         outf.write(line)
+        try:
+            print char
+            print embedding
+        except Exception as e:
+            print e
+            continue
+        line = '%s\t%d\t%s\n' % (char, idx, ' '.join([str(i) for i in embedding]))
+        outf.write(line)
+
+    outf.close()
 
 
 
