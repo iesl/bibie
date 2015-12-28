@@ -523,6 +523,65 @@ def test_model(model_path,
     log_file.write('%s\n' % str(test_eval))
 
 
+def write_embeddings(model_path,
+                     train_path,
+                     val_path=None,
+                     test_path=None,
+                     vocab_file=None,
+                     label_file=None,
+                     output_file=None,
+                     embeddings_file=None):
+    RNG = np.random.RandomState(SEED)
+    timestamp = time.strftime('%m%d%Y_%H%M%S')
+    assert output_file is not None
+    log_file = open(output_file, 'w+')
+    log_file.write('%s\n' % timestamp)
+
+    print "Loading Dataset"
+    _, dev, test, vmap = load_dataset(train_path, test_path, vocab_file, rng=RNG, devfile=val_path)
+    y_val, X_val = dev
+    y_test, X_test = test
+    pad_char = u'♥'
+    vmap[pad_char] = 0
+
+    log_file.write('dev: %d, test: %d\n' % (X_val.shape[0], X_test.shape[0]))
+
+    classes = cPickle.load(open(label_file, 'r'))
+    classnames = list(map(lambda x: x[0], sorted(classes.items(), key=lambda x: x[1])))
+    n_classes = len(classnames)
+    log_file.write('classes: %s\n' % str(classes))
+
+    # Initialize theano variables for input and output
+    X = T.imatrix('X')
+    M = T.matrix('M')
+    y = T.ivector('y')
+
+    # Construct network
+    print "Building Model"
+    log_file.write('model file: %s\n' % model_path)
+    #    network = build_model(hyparams, vmap, log_file, n_classes, invar=X, maskvar=M)
+    network = build_model(hyparams, vmap, log_file, n_classes, invar=X, maskvar=M)
+    read_model_data(network, model_path)
+    ASSUME = {network['input']: (200, 140), network['mask']: (200, 140)}
+    embed_layer = network['emb']
+    print 'input:', ASSUME
+    print 'embedding layer output shape:'
+    print get_output_shape(embed_layer, ASSUME)
+    V = len(vmap)
+    ematrix = np.zeros((V, hyparams.embedding_dim), dtype=np.float32)
+    for char, idx in vmap.items():
+        input = np.asarray([idx], dtype=np.int32)
+        ematrix[idx] = layer.get_output(embed_layer, inputs=input)
+    with open(output_file, 'w') as outf:
+        for char, idx in vmap.items():
+            print ematrix[idx]
+            line = '%d\t%s\n' % (idx, ' '.join([str(v) for v in ematrix[idx]]))
+            outf.write(line)
+
+
+
+
+
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='train word-level lstm')
     # input
@@ -551,6 +610,7 @@ if __name__ == '__main__':
 
     # switches
     p.add_argument('--test-only', type=int, default=0, help='just test model contained in model file')
+    p.add_argument('--write-embeddings', type=int, default=0, help='write char embeddings to text format')
 
     args = p.parse_args()
     print("ARGS:")
@@ -567,6 +627,14 @@ if __name__ == '__main__':
                    output_file=args.results_file,
                    label_file=args.label_file
                    )
+    elif args.write_embeddings:
+            write_embeddings(args.model_file,
+               train_path=args.tweet_file,
+               vocab_file=args.vocab,
+               test_path=args.test_file,
+               output_file=args.results_file,
+               label_file=args.label_file
+               )
     else:
         learn_model(hyparams,
                     args.tweet_file,
