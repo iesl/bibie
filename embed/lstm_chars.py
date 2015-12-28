@@ -581,18 +581,9 @@ def write_embeddings(model_path,
         one_hot = np.zeros((1, V), dtype=np.int32)
         one_hot[:, idx] = 1
         embedding = lookup(one_hot)
-        try:
-            print char
-        except Exception as e:
-            print e
-        print embedding[0,:]
-        ematrix[idx] = embedding[0,:]
+        ematrix[idx] = embedding[0,idx]
     np.savetxt(output_file, ematrix, delimiter=' ')
     print 'wrote embeddings to', output_file
-
-
-
-
 
 
 if __name__ == '__main__':
