@@ -580,7 +580,7 @@ def write_embeddings(model_path,
 
     for char, idx in vmap.items():
         one_hot = np.zeros((1, V), dtype=np.int32)
-        one_hot[idx] = 1.
+        one_hot[:, idx] = 1.
         embedding = lookup(one_hot)
         try:
             print char
