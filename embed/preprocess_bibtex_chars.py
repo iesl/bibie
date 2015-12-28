@@ -42,6 +42,9 @@ def build_labels_and_vocab(args):
                             char_count[char] += 1
         if i % 50 == 0:
             print 'done with %d/%d' % (i, n)
+        if i % 300 == 0: # write prelim label/vocab counts because i'm impatient
+            cPickle.dump(label_count, open('%s/raw_label_counts_tmp.pkl' % outdir, 'w'))
+            cPickle.dump(char_count, open('%s/raw_char_counts_tmp.pkl' % outdir, 'w'))
 
     print '%d / %d files had errors' % (len(errors), n)
     errors = set(errors)
