@@ -5,9 +5,12 @@ from collections import defaultdict
 import bibtexparser
 from bibtexparser.bparser import BibTexParser
 from bibtexparser.customization import convert_to_unicode
-
+import string
 
 def build_labels_and_vocab(args):
+    valid_chars = set([])
+    if not args.utf8:
+        valid_chars = set(string.printable)
     label_count = defaultdict(int)
     char_count = defaultdict(int)
     dirname = args.indir
@@ -17,7 +20,8 @@ def build_labels_and_vocab(args):
     n = len(fnames)
     errors = []
     parser = BibTexParser()
-    parser.customization = convert_to_unicode
+    if args.utf8:
+        parser.customization = convert_to_unicode
     for i, f in enumerate(fnames):
         with open(f, 'r') as bib_file:
             bib_db = None
@@ -31,7 +35,11 @@ def build_labels_and_vocab(args):
                     label_count[label] += 1
                     label_df[f].add(label)
                     for char in list(contents):
-                        char_count[char] += 1
+                        if not args.utf8:
+                            if char in valid_chars:
+                                char_count[char] += 1
+                        else:
+                            char_count[char] += 1
         if i % 50 == 0:
             print 'done with %d/%d' % (i, n)
 
@@ -118,6 +126,7 @@ if __name__ == '__main__':
     p.add_argument('--indir', required=True, type=str)
     p.add_argument('--outdir', required=True, type=str)
     p.add_argument('--filter-below', type=float, help='filter labels that occur in fewer than this percent of bibs')
+    p.add_argument('--utf8', type=int, default=0, help='allow non-ascii characters')
     args = p.parse_args()
     print args
     if args.init:
