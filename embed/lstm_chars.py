@@ -568,15 +568,27 @@ def write_embeddings(model_path,
     print 'embedding layer output shape:'
     print get_output_shape(embed_layer, ASSUME)
     V = len(vmap)
+    #    net['input'] = layer.InputLayer((batchsize, maxlen), input_var=invar)
+    #    net['emb'] = layer.EmbeddingLayer(net['input'], input_size=V, output_size=embedding_dim, W=W)
+
+    input_layer = layer.InputLayer((1, V))
+    my_embed = layer.EmbeddingLayer(input_layer, input_size=V, output_size=hyparams.embedding_dim, W=embed_layer.W)
+    output = layer.get_output(my_embed, X)
+    lookup = theano.function([X], output)
+
     ematrix = np.zeros((V, hyparams.embedding_dim), dtype=np.float32)
     for char, idx in vmap.items():
-        input = np.asarray([idx], dtype=np.int32)
-        ematrix[idx] = layer.get_output(embed_layer, inputs=input)
-    with open(output_file, 'w') as outf:
-        for char, idx in vmap.items():
-            print ematrix[idx]
-            line = '%d\t%s\n' % (idx, ' '.join([str(v) for v in ematrix[idx]]))
-            outf.write(line)
+        one_hot = np.zeros((1, V), dtype=np.int32)
+        one_hot[idx] = 1.
+        embedding = lookup(one_hot)
+        print char
+        print embedding
+    #     ematrix[idx] = layer.get_output(embed_layer, inputs=input)
+    # with open(output_file, 'w') as outf:
+    #     for char, idx in vmap.items():
+    #         print ematrix[idx]
+    #         line = '%d\t%s\n' % (idx, ' '.join([str(v) for v in ematrix[idx]]))
+    #         outf.write(line)
 
 
 
