@@ -584,11 +584,19 @@ def write_embeddings(model_path,
         embedding = lookup(one_hot)
         try:
             print char
-            print embedding
+#            print embedding.shape
+#            print embedding[0, :].shape
+#            print embedding[0, :]
         except Exception as e:
             print e
             continue
-        line = '%s\t%d\t%s\n' % (char, idx, ' '.join([str(i) for i in embedding]))
+        values = []
+        for val in embedding[0,:]:
+            values.append(val)
+        val_string = ' '.join([str(v) for v in values])
+        print val_string
+        print ""
+        line = '%s\t%d\t%s\n\n' % (char, idx, val_string)
         outf.write(line)
 
     outf.close()
