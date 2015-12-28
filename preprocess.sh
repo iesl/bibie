@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 root=$PWD
-indir=$root/bibtex/bibs
+dataRoot=/iesl/canvas/ksilvers/bibie-exec/bibs
+indir=$dataRoot
 outdir=$root/my_preproc
 mkdir -pv $outdir/bibs
 
@@ -10,7 +11,6 @@ vocab=$outdir/vocab.pkl
 
 python $root/embed/preprocess_bibtex_chars.py \
 --indir $indir \
---outdir $outdir \
---vocab $vocab \
---labels $labels
+--outdir $outdir
+
 

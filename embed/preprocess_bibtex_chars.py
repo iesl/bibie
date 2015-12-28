@@ -32,6 +32,8 @@ def finalize_labeldict_and_vocab():
     chars = list(CHAR_VOCAB)
     for i, c in enumerate(chars):
         CHAR_DICT[c] = i
+
+    cPickle.dump(LABEL_COUNTS, open('label_counts.pkl', 'w'))
     #  prune out labels that occur only once
     labels_pruned = {}
     for k, v in LABEL_COUNTS.items():
