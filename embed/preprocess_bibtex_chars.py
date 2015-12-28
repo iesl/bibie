@@ -9,7 +9,9 @@ import string
 import re
 
 
-IGNORE_SET = set(['ENTRYTYPE', 'ID'])  # ENTRYYPE e.g. 'article', 'inproceedings'; ID e.g. Kate2013
+IGNORE_SET = frozenset(['ENTRYTYPE',  #  e.g. 'article', 'inproceedings'
+                  'ID'  # e.g. 'Kate2013', 'ratinov2009design'
+                  ])
 
 
 def clean_label(label):
@@ -18,9 +20,9 @@ def clean_label(label):
 
 
 def build_labels_and_vocab(args):
-    valid_chars = set([])
+    valid_chars = None
     if not args.utf8:
-        valid_chars = set(string.printable)
+        valid_chars = frozenset(string.printable)
     label_count = defaultdict(int)
     char_count = defaultdict(int)
     dirname = args.indir
@@ -61,7 +63,7 @@ def build_labels_and_vocab(args):
             print 'wrote tmp labels/vocab'
 
     print '%d / %d files had errors' % (len(errors), n)
-    errors = set(errors)
+    errors = frozenset(errors)
     cPickle.dump(errors, open('%s/errors.pkl' % outdir, 'w'))
 
     # prune labels that seldom occur
