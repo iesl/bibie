@@ -1,23 +1,24 @@
 import os
 import cPickle
 import argparse
-import bibtexparser as bparser
-
-class Entry(object):
-    def __init__(self, original, lines):
-        self.original = original
-        self.lines = lines
+import bibtexparser
+from bibtexparser.bparser import BibTexParser
+from bibtexparser.customization import convert_to_unicode
 
 LABEL_COUNTS = {}
 LABEL_DICT = {}
 CHAR_VOCAB = set([])
 CHAR_DICT = {}
 
+PARSER = BibTexParser()
+PARSER.customization = convert_to_unicode
+
+
 def parse_file(filename):
-    with open(filename, 'r') as bfile:
-        bstr = bfile.read()
-    bdb = bparser.loads(bstr)
-    return bdb.entries
+    with open(filename) as bfile:
+        bib_db = bibtexparser.load(bfile, parser=PARSER)
+        return bib_db.entries
+    return None
 
 def build_labeldict_and_vocab(entries):
     for entry in entries:
@@ -76,7 +77,8 @@ def doit(args):
         for fname in fnames:
             try:
                 entries = parse_file(fname)
-                build_labeldict_and_vocab(entries)
+                if entries:
+                    build_labeldict_and_vocab(entries)
             except Exception as e:
                 print e
                 errors.append(fname)
@@ -103,10 +105,11 @@ def doit(args):
         outfile = '%s/bibs/%s' % (outdir, base_fname)
         try:
             entries = parse_file(fname)
-            lines = entries2ints(entries)
-            with open(outfile, 'w') as outf:
-                for line in lines:
-                    outf.write(line + '\n')
+            if entries:
+                lines = entries2ints(entries)
+                with open(outfile, 'w') as outf:
+                    for line in lines:
+                        outf.write(line + '\n')
         except Exception:
             pass
         count += 1
