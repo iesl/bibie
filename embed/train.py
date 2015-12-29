@@ -90,11 +90,13 @@ def train_model(hyparams,
 
     def compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix=''):
         print 'starting validation'
+        print 'nval:', len(y_val)
         start = time.time()
         val_loss = 0.
         val_acc = 0.
         val_batches = 0
         for batch in iterate_minibatches(X_val, y_val, batchsize, shuffle=False):
+            assert batch is not None
             x_val_mini, y_val_mini = batch
             v_loss, v_acc, _ = val_fxn(x_val_mini[:, :, 0], x_val_mini[:, :, 1], y_val_mini)
             val_loss += v_loss
@@ -141,7 +143,7 @@ def train_model(hyparams,
                 print prefix, nbatches
 #                if (train_batches % (int(batchsize/5.))) == 0:
 #                    print '[epoch %d fold %d batch %d / %f]' % (epoch, fold_count, train_batches, nbatches)
-                if train_batches % 512 == 0:
+                if train_batches % 2 == 0:
                     print '%s validation' % prefix
                     log.write('%s\n' % prefix) 
                     val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix=prefix)
