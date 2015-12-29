@@ -105,8 +105,8 @@ def train_model(hyparams,
         try:
             val_loss /= val_batches
             val_acc /= val_batches
-            log_file.write('%s\tvalidation loss: %.6f\n' % (prefix, val_loss))
-            log_file.write('%s\tvalidation acc: %.3f\n' % (prefix, val_acc * 100.))
+            log_file.write('%s\tloss: %.6f\n' % (prefix, val_loss))
+            log_file.write('%s\taccuracy: %.3f\n' % (prefix, val_acc * 100.))
 #            log_file.write("%validation loss:\t\t{:.6f}\n".format(val_loss))
 #            log_file.write("\t\tvalidation accuracy:\t\t{:.2f} %\n".format(val_acc * 100.))
             log_file.flush()
@@ -147,7 +147,7 @@ def train_model(hyparams,
                 if train_batches % 512 == 0:
                     print '%s validation' % prefix
                     log.write('%s\n' % prefix) 
-                    val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix=prefix)
+                    val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix=prefix + '(VAL)')
                     if val_acc >= best_val_acc:
                         best_val_acc = val_acc
                         print 'best val accuracy: %.4f' % best_val_acc
@@ -172,22 +172,24 @@ def train_model(hyparams,
         progress = 'epoch %d took %.3f s\n' % (epoch, time.time() - epoch_start)
         print progress
         log.write(progress)
-        log.write('training loss: %.6f' % (train_err/train_batches))
+        log.write('[epoch %d] training loss: %.6f' % (epoch, train_err/train_batches))
         log.flush()
-        val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val)
+        val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix='[epoch %d VAL]' % epoch)
         if val_acc >= best_val_acc:
             best_val_acc = val_acc
             write_model_data(network, '%s/best_lstm_model' % log_dir)
         log.write('best validation accuracy: %.4f\n' % (best_val_acc * 100.))
         log.flush()
-        test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
+        # test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
+        test_loss, test_acc = compute_val_error(log_file=log, X_val=X_test, y_val=y_test, prefix='[epoch %d TEST]' % epoch)
         log.write('test accuracy: %.4f\n' % (test_acc * 100.))
         log.flush()
     progress = 'training took %3f s\n' % (time.time() - start)
     print progress
     log.write(progress)
     read_model_data(network, '%s/best_lstm_model' % log_dir)
-    test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
+    test_loss, test_acc = compute_val_error(log_file=log, X_val=X_test, y_val=y_test, prefix='FINAL')
+    # test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
     log.write('final test accuracy: %.4f\n' % (test_acc * 100.))
     log.flush()
     log.close()
