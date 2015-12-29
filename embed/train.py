@@ -112,9 +112,9 @@ def train_model(hyparams,
     k = hyparams.kfolds
     fold_size = int(round(1. * ntrain / k))
     nbatches = int(round(1. * fold_size / batchsize))
-    valfreq = max(int(round(nbatches / 4.)), 2)
-    print 'validating every %d batches' % valfreq
-    log.write('validating every %d batches\n' % valfreq)
+    # valfreq = max(int(round(nbatches / 4.)), 2)
+    print 'validating every %d batches' % (int(batchsize/2.))
+    # log.write('validating every %d batches\n' % valfreq)
     log.flush()
     best_val_acc = -np.inf
     start = time.time()
@@ -134,7 +134,7 @@ def train_model(hyparams,
                 train_batches += 1
                 if (train_batches % (int(batchsize/5.))) == 0:
                     print '[epoch %d fold %d batch %d / %f]' % (epoch, fold_count, train_batches, nbatches)
-                if train_batches % valfreq == 0:
+                if train_batches % int(batchsize/2.) == 0:
                     log.write('\t[epoch %d, fold %d, batch %d]' % (epoch, fold_count, train_batches))
                     val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val)
                     if val_acc >= best_val_acc:
