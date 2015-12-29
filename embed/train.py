@@ -141,10 +141,10 @@ def train_model(hyparams,
                 train_err += train_fxn(x_mini[:, :, 0], x_mini[:, :, 1], y_mini)
                 train_batches += 1
                 prefix = '[epoch %d, fold %d, batch %d]' % (epoch, fold_count, train_batches)
-                print prefix, nbatches
-#                if (train_batches % (int(batchsize/5.))) == 0:
-#                    print '[epoch %d fold %d batch %d / %f]' % (epoch, fold_count, train_batches, nbatches)
-                if train_batches % 2 == 0:
+                # print prefix, nbatches
+               if (train_batches % (int(batchsize/5.))) == 0:
+                   print prefix, nbatches
+                if train_batches % 512 == 0:
                     print '%s validation' % prefix
                     log.write('%s\n' % prefix) 
                     val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix=prefix)
