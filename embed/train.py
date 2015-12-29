@@ -142,7 +142,7 @@ def train_model(hyparams,
                 train_batches += 1
                 prefix = '[epoch %d, fold %d, batch %d]' % (epoch, fold_count, train_batches)
                 # print prefix, nbatches
-               if (train_batches % (int(batchsize/5.))) == 0:
+                if (train_batches % (int(batchsize/5.))) == 0:
                    print prefix, nbatches
                 if train_batches % 512 == 0:
                     print '%s validation' % prefix
