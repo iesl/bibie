@@ -125,14 +125,15 @@ def train_model(hyparams,
         fold_count = 0
         for y_train, X_train in iterate_folds(train_file, ntrain, k):
             fold_start = time.time()
-            print '[epoch %d fold %d/%d (%d examples)]' % (epoch, fold_count, k, len(y))
+            print '[epoch %d fold %d/%d (%d examples)]' % (epoch, fold_count, k, len(y_train))
             fold_count += 1
             for batch in iterate_minibatches(X_train, y_train, batchsize, rng=RNG, shuffle=True):
                 x_mini, y_mini = batch
                 # print x_train.shape, y_train.shape
                 train_err += train_fxn(x_mini[:, :, 0], x_mini[:, :, 1], y_mini)
                 train_batches += 1
-                print '[epoch %d fold %d batch %d / %f]' % (epoch, fold_count, train_batches, nbatches)
+                if (train_batches % (int(batchsize/5.))) == 0:
+                    print '[epoch %d fold %d batch %d / %f]' % (epoch, fold_count, train_batches, nbatches)
                 if train_batches % valfreq == 0:
                     log.write('\t[epoch %d, fold %d, batch %d]' % (epoch, fold_count, train_batches))
                     val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val)
