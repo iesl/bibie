@@ -88,7 +88,9 @@ def train_model(hyparams,
     train_fxn = theano.function([X, M, y], cost, updates=grad_updates, allow_input_downcast=True)
     val_fxn = theano.function([X, M, y], [val_cost_fn, val_acc_fn, preds], allow_input_downcast=True)
 
-    def compute_val_error(log_file=log, X_val=X_val, y_val=y_val):
+    def compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix=''):
+        print 'starting validation'
+        start = time.time()
         val_loss = 0.
         val_acc = 0.
         val_batches = 0
@@ -101,11 +103,14 @@ def train_model(hyparams,
         try:
             val_loss /= val_batches
             val_acc /= val_batches
-            log_file.write("\t\tvalidation loss:\t\t{:.6f}\n".format(val_loss))
-            log_file.write("\t\tvalidation accuracy:\t\t{:.2f} %\n".format(val_acc * 100.))
+            log_file.write('%s\tvalidation loss: %.6f\n' % (prefix, val_loss))
+            log_file.write('%s\tvalidation acc: %.3f\n' % (prefix, val_acc * 100.))
+#            log_file.write("%validation loss:\t\t{:.6f}\n".format(val_loss))
+#            log_file.write("\t\tvalidation accuracy:\t\t{:.2f} %\n".format(val_acc * 100.))
             log_file.flush()
         except ZeroDivisionError:
             print('WARNING: val_batches == 0')
+        print 'validation took %.3f s' % (time.time() - start)
 
     batchsize = hyparams.batchsize
     nepochs = hyparams.nepochs
@@ -132,30 +137,34 @@ def train_model(hyparams,
                 # print x_train.shape, y_train.shape
                 train_err += train_fxn(x_mini[:, :, 0], x_mini[:, :, 1], y_mini)
                 train_batches += 1
-                if (train_batches % (int(batchsize/5.))) == 0:
-                    print '[epoch %d fold %d batch %d / %f]' % (epoch, fold_count, train_batches, nbatches)
-                if train_batches % int(batchsize/2.) == 0:
-                    log.write('\t[epoch %d, fold %d, batch %d]' % (epoch, fold_count, train_batches))
-                    val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val)
+                prefix = '[epoch %d, fold %d, batch %d]' % (epoch, fold_count, train_batches)
+                print prefix, nbatches
+#                if (train_batches % (int(batchsize/5.))) == 0:
+#                    print '[epoch %d fold %d batch %d / %f]' % (epoch, fold_count, train_batches, nbatches)
+                if train_batches % 512 == 0:
+                    print '%s validation' % prefix
+                    log.write('%s\n' % prefix) 
+                    val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix=prefix)
                     if val_acc >= best_val_acc:
                         best_val_acc = val_acc
                         print 'best val accuracy: %.4f' % best_val_acc
                         write_model_data(network, '%s/best_lstm_model' % log_dir)
-                    log.write('\t\tcurrent best val accuracy: %.4f\n' % (best_val_acc * 100.))
+                    log.write('%s current best val accuracy: %.4f\n' % (prefix, best_val_acc * 100.))
                     log.flush()
             progress = '\tepoch %d, fold %d took %.3f s\n' % (epoch, fold_count, time.time() - fold_start)
             print progress
             log.write(progress)
-            log.write('\t\t[fold %d] training loss: %.6f' % (fold_count, train_err/train_batches))
+            prefix = '[epoch %d, fold %d]' % (epoch, fold_count)
+            log.write('%s\ttraining loss: %.6f' % (prefix, train_err/train_batches))
             log.flush()
             val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val)
             if val_acc >= best_val_acc:
                 best_val_acc = val_acc
                 write_model_data(network, '%s/best_lstm_model' % log_dir)
-            log.write('\t\t[fold %d] current best val accuracy: %.4f\n' % (fold_count, best_val_acc * 100.))
+            log.write('%s\tcurrent best val accuracy: %.3f\n' % (prefix, best_val_acc * 100.))
             log.flush()
             test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
-            log.write('\t\t[fold %d] test accuracy: %.4f\n' % (fold_count, test_acc * 100.))
+            log.write('%s\ttest accuracy: %.3f\n' % (prefix, test_acc * 100.))
             log.flush()
         progress = 'epoch %d took %.3f s\n' % (epoch, time.time() - epoch_start)
         print progress
