@@ -160,13 +160,14 @@ def train_model(hyparams,
             prefix = '[epoch %d, fold %d]' % (epoch, fold_count)
             log.write('%s\ttraining loss: %.6f' % (prefix, train_err/train_batches))
             log.flush()
-            val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val)
+            val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix='%s(VAL)' % prefix)
             if val_acc >= best_val_acc:
                 best_val_acc = val_acc
                 write_model_data(network, '%s/best_lstm_model' % log_dir)
             log.write('%s\tcurrent best val accuracy: %.3f\n' % (prefix, best_val_acc * 100.))
             log.flush()
-            test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
+            test_loss, test_acc = compute_val_error(log_file=log, X_val=X_test, y_val=y_test, prefix='%s(TEST)' % prefix)
+            # test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
             log.write('%s\ttest accuracy: %.3f\n' % (prefix, test_acc * 100.))
             log.flush()
         progress = 'epoch %d took %.3f s\n' % (epoch, time.time() - epoch_start)
