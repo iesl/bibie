@@ -2,6 +2,7 @@ class HParams(object):
     def __init__(self,
                  nepochs=30,
                  batchsize=512,
+                 kfolds=20,
                  learning_rate=0.1,
                  bidirectional=True,
                  nhidden=256,
@@ -13,6 +14,7 @@ class HParams(object):
 
         self.nepochs = nepochs
         self.batchsize = batchsize
+        self.kfolds = kfolds
         self.learning_rate = learning_rate
         self.bidirectional = bool(bidirectional)
         self.nhidden = nhidden
@@ -25,6 +27,7 @@ class HParams(object):
     def parse_args(self, args):
         self.nepochs = args.nepochs
         self.batchsize = args.batchsize
+        self.kfolds = args.kfolds
         self.learning_rate = args.learning_rate
         self.bidirectional = bool(args.bidirectional)
         self.nhidden = args.nhidden
@@ -38,6 +41,7 @@ class HParams(object):
         hps = {}
         hps['nepochs'] = self.nepochs
         hps['batchsize'] = self.batchsize
+        hps['kfolds'] = self.kfolds
         hps['learning_rate'] = self.learning_rate
         hps['bidirectional'] = self.bidirectional
         hps['nhidden'] = self.nhidden
