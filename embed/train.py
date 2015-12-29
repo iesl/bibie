@@ -113,6 +113,7 @@ def train_model(hyparams,
         except ZeroDivisionError:
             print('WARNING: val_batches == 0')
         print 'validation took %.3f s' % (time.time() - start)
+        return val_loss, val_acc
 
     batchsize = hyparams.batchsize
     nepochs = hyparams.nepochs
