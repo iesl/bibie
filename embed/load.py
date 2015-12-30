@@ -1,5 +1,4 @@
 import numpy as np
-from lstm_chars import pad_mask
 from memory_profiler import profile
 
 
@@ -21,7 +20,7 @@ def lazy_load(filename, n, k):
         yield process(chunk)
 
 
-def regular_load(filename):
+def load(filename):
     with open(filename, 'r') as f:
         return process(f.readlines())
 
@@ -46,6 +45,24 @@ def process(lines):
     Y = np.asarray(Y, dtype=np.int32)
     X = pad_mask(X)
     return Y, X
+
+
+def pad_mask(X, pad_with=0, maxlen=140):
+    N = len(X)
+    X_out = None
+    if pad_with == 0:
+        X_out = np.zeros((N, maxlen, 2), dtype=np.int32)
+    else:
+        X_out = np.ones((N, maxlen, 2), dtype=np.int32) * pad_with
+    for i, x in enumerate(X):
+        n = len(x)
+        if n < maxlen:
+            X_out[i, :n, 0] = x
+            X_out[i, :n, 1] = 1
+        else:
+            X_out[i, :, 0] = x[:maxlen]
+            X_out[i, :, 1] = 1
+    return X_out
 
 
 @profile

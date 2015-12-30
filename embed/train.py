@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from lstm_chars import pad_mask, build_model, read_model_data, write_model_data, iterate_minibatches
+from lstm_chars import build_model, read_model_data, write_model_data, iterate_minibatches
 from hparams import HParams
-from load import load, lazy_load
+from load import load, lazy_load, pad_mask
 
 import os
 # from memory_profiler import profile

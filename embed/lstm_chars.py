@@ -14,7 +14,7 @@ from lasagne.layers import get_output_shape
 
 from ConfusionMatrix import *
 from hparams import HParams
-from load import regular_load
+from load import load, pad_mask
 
 MAXLEN = 140
 SEED = 1234
@@ -395,24 +395,6 @@ def write_model_data(model, filename):
         cPickle.dump(data, f)
 
 
-def pad_mask(X, pad_with=0, maxlen=MAXLEN):
-    N = len(X)
-    X_out = None
-    if pad_with == 0:
-        X_out = np.zeros((N, maxlen, 2), dtype=np.int32)
-    else:
-        X_out = np.ones((N, maxlen, 2), dtype=np.int32) * pad_with
-    for i, x in enumerate(X):
-        n = len(x)
-        if n < maxlen:
-            X_out[i, :n, 0] = x
-            X_out[i, :n, 1] = 1
-        else:
-            X_out[i, :, 0] = x[:maxlen]
-            X_out[i, :, 1] = 1
-    return X_out
-
-
 def load_dataset(trainfile, testfile, vocabfile, devfile=None, rng=None, pad_with=0):
     def load_file(fname, pad_with=0):
         X, Y = [], []
@@ -523,7 +505,7 @@ def test_model(model_path,
     eval_fxn = theano.function([X, M, y], [cost_fxn, acc_fxn, predictions], allow_input_downcast=True)
 
     print 'loading dev dataset'
-    devy, devx = regular_load(val_path)
+    devy, devx = load(val_path)
 
     print 'evaluating dev'
     devp, dev_acc = get_predictions(devx, devy, eval_fxn, batchsize)
@@ -536,7 +518,7 @@ def test_model(model_path,
     del devy
 
     print 'loading test dataset'
-    testy, testx = regular_load(test_path)
+    testy, testx = load(test_path)
 
     print 'evaluating dev'
     testp, test_acc = get_predictions(testx, testy, eval_fxn, batchsize)
