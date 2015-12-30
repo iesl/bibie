@@ -14,7 +14,7 @@ from lasagne.layers import get_output_shape
 
 from ConfusionMatrix import *
 from hparams import HParams
-from load import load
+from load import regular_load
 
 MAXLEN = 140
 SEED = 1234
@@ -523,7 +523,7 @@ def test_model(model_path,
     eval_fxn = theano.function([X, M, y], [cost_fxn, acc_fxn, predictions], allow_input_downcast=True)
 
     print 'loading dev dataset'
-    devy, devx = load(val_path)
+    devy, devx = regular_load(val_path)
 
     print 'evaluating dev'
     devp, dev_acc = get_predictions(devx, devy, eval_fxn, batchsize)
@@ -536,7 +536,7 @@ def test_model(model_path,
     del devy
 
     print 'loading test dataset'
-    testy, testx = load(test_path)
+    testy, testx = regular_load(test_path)
 
     print 'evaluating dev'
     testp, test_acc = get_predictions(testx, testy, eval_fxn, batchsize)

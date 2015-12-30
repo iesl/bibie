@@ -21,7 +21,7 @@ def lazy_load(filename, n, k):
         yield process(chunk)
 
 
-def load(filename):
+def regular_load(filename):
     with open(filename, 'r') as f:
         return process(f.readlines())
 
