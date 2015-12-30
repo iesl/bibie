@@ -603,6 +603,7 @@ if __name__ == '__main__':
     # hyperparameters
     p.add_argument('--nepochs', type=int, default=30, help='# of epochs')
     p.add_argument('--batchsize', type=int, default=512, help='batch size')
+    p.add_argument('--kfolds', type=int, default=20)
     p.add_argument('--learning-rate', type=float, default=0.1, help='learning rate')
     p.add_argument('--bidirectional', type=int, default=1, help='bidirectional LSTM?')
     p.add_argument('--nhidden', type=int, default=256, help='num hidden units')
@@ -614,7 +615,7 @@ if __name__ == '__main__':
 
     # switches
     p.add_argument('--test-only', type=int, default=0, help='just test model contained in model file')
-    p.add_argument('--write-embeddings', type=int, default=0, help='write char embeddings to text format')
+    p.add_argument('--write-embeddings', type=int, default=1, help='write char embeddings to text format')
 
     args = p.parse_args()
     print("ARGS:")
