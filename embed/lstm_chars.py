@@ -14,6 +14,7 @@ from lasagne.layers import get_output_shape
 
 from ConfusionMatrix import *
 from hparams import HParams
+from load import load
 
 MAXLEN = 140
 SEED = 1234
@@ -463,13 +464,27 @@ def load_dataset(trainfile, testfile, vocabfile, devfile=None, rng=None, pad_wit
 
 
 def test_model(model_path,
-               train_path,
-               val_path=None,
-               test_path=None,
+               val_path,
+               test_path,
+               batchsize=100,
                vocab_file=None,
                label_file=None,
                output_file=None,
                embeddings_file=None):
+
+    def get_predictions(x, y, eval_fxn, batchsize):
+        accuracy = 0.
+        batches = 0
+        predictions = []
+        for batch in iterate_minibatches(x, y, batchsize, shuffle=False):
+            xmini, ymini = batch
+            loss, acc, preds = eval_fxn(xmini[:, :, 0], xmini[:, :, 1], ymini)
+            predictions.extend(preds)
+            batches += 1
+            accuracy += acc
+        assert batches > 0
+        accuracy /= batches
+        return predictions, accuracy
 
     RNG = np.random.RandomState(SEED)
     timestamp = time.strftime('%m%d%Y_%H%M%S')
@@ -477,19 +492,14 @@ def test_model(model_path,
     log_file = open(output_file, 'w+')
     log_file.write('%s\n' % timestamp)
 
-    print "Loading Dataset"
-    _, dev, test, vmap = load_dataset(train_path, test_path, vocab_file, rng=RNG, devfile=val_path)
-    y_val, X_val = dev
-    y_test, X_test = test
+    classmap = cPickle.load(open(label_file, 'r'))
+    nclasses = len(classmap)
+    classnames = list(map(lambda x: x[0], sorted(classmap.items(), key=lambda x: x[1])))
+
+    vmap = cPickle.load(open(vocab_file, 'r'))
     pad_char = u'♥'
     vmap[pad_char] = 0
-
-    log_file.write('dev: %d, test: %d\n' % (X_val.shape[0], X_test.shape[0]))
-
-    classes = cPickle.load(open(label_file, 'r'))
-    classnames = list(map(lambda x: x[0], sorted(classes.items(), key=lambda x: x[1])))
-    n_classes = len(classnames)
-    log_file.write('classes: %s\n' % str(classes))
+    V = len(vmap)
 
     # Initialize theano variables for input and output
     X = T.imatrix('X')
@@ -497,29 +507,45 @@ def test_model(model_path,
     y = T.ivector('y')
 
     # Construct network
-    print "Building Model"
+    print 'building model'
+    network = build_model(hyparams, vmap, log_file, nclasses, invar=X, maskvar=M)
+    print 'loading parameters from file %s' % model_path
     log_file.write('model file: %s\n' % model_path)
-    #    network = build_model(hyparams, vmap, log_file, n_classes, invar=X, maskvar=M)
-
-    network = build_model(hyparams, vmap, log_file, n_classes, invar=X, maskvar=M)
+    log_file.flush()
     read_model_data(network, model_path)
 
-    # need to switch off droput while testing
-    test_output = lasagne.layers.get_output(network['softmax'], deterministic=True)
-    val_cost_fn = lasagne.objectives.categorical_crossentropy(test_output, y).mean()
-    preds = T.argmax(test_output, axis=1)
-    val_acc_fn = T.mean(T.eq(preds, y), dtype=theano.config.floatX)
-    val_fn = theano.function([X, M, y], [val_cost_fn, val_acc_fn, preds], allow_input_downcast=True)
+    output = layer.get_output(network['softmax'], deterministic=True)
+    predictions = T.argmax(output, axis=1)
+    acc_fxn = T.mean(T.eq(predictions, y), dtype=theano.config.floatX)
+    cost_fxn = lasagne.objectives.categorical_crossentropy(output, y).mean()
 
-    val_loss, val_acc, val_pred = val_fn(X_val[:, :, 0], X_val[:, :, 1], y_val)
-    dev_eval = ConfusionMatrix(y_val, val_pred, classnames)
-    log_file.write('DEV RESULTS\n')
+    print 'compiling functions'
+    eval_fxn = theano.function([X, M, y], [cost_fxn, acc_fxn, predictions], allow_input_downcast=True)
+
+    print 'loading dev dataset'
+    devy, devx = load(val_path)
+
+    print 'evaluating dev'
+    devp, dev_acc = get_predictions(devx, devy, eval_fxn, batchsize)
+    dev_eval = ConfusionMatrix(devy, devp, classnames)
+    log_file.write('dev results\n')
+    log_file.write('accuracy: %.3f\n' % (dev_acc * 100.))
     log_file.write('%s\n' % str(dev_eval))
+    log_file.flush()
+    del devx
+    del devy
 
-    test_loss, test_acc, test_pred = val_fn(X_test[:, :, 0], X_test[:, :, 1], y_test)
-    test_eval = ConfusionMatrix(y_test, test_pred, classnames)
-    log_file.write('TEST RESULTS\n')
+    print 'loading test dataset'
+    testy, testx = load(test_path)
+
+    print 'evaluating dev'
+    testp, test_acc = get_predictions(testx, testy, eval_fxn, batchsize)
+    test_eval = ConfusionMatrix(testy, testp, classnames)
+    log_file.write('\n\ntest results\n')
+    log_file.write('accuracy: %.3f\n' % (test_acc * 100.))
     log_file.write('%s\n' % str(test_eval))
+    log_file.flush()
+    log_file.close()
 
 
 def write_embeddings(model_path,
@@ -625,9 +651,10 @@ if __name__ == '__main__':
 
     if args.test_only:
         test_model(args.model_file,
-                   train_path=args.tweet_file,
+                   args.dev_file,
+                   args.test_file,
+                   batchsize=args.batchsize,
                    vocab_file=args.vocab,
-                   test_path=args.test_file,
                    output_file=args.results_file,
                    label_file=args.label_file
                    )

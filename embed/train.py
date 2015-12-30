@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from lstm_chars import pad_mask, build_model, read_model_data, write_model_data, iterate_minibatches
 from hparams import HParams
+from load import load, lazy_load
 
 import os
 # from memory_profiler import profile
@@ -37,8 +38,8 @@ def train_model(hyparams,
     vmap[pad_char] = 0
     V = len(vmap)
 
-    y_val, X_val = load_dataset(val_file)
-    y_test, X_test = load_dataset(test_file)
+    y_val, X_val = load(val_file)
+    y_test, X_test = load(test_file)
 
     cmd = 'cat %s | wc -l > tmp' % train_file
     print cmd
@@ -54,10 +55,12 @@ def train_model(hyparams,
     log.write('nclasses: %d\n' % nclasses)
     log.write(str(hyparams) + '\n')
     log.flush()
+
     # Initialize theano variables for input and output
     X = T.imatrix('X')
     M = T.matrix('M')
     y = T.ivector('y')
+
     print 'building model'
     network = build_model(hyparams, vmap, log, nclasses, invar=X, maskvar=M)
     if model_file is not None:
@@ -65,6 +68,7 @@ def train_model(hyparams,
         read_model_data(network, model_file)
         log.write('loaded params from file: %s\n' % model_file)
         log.flush()
+
     # set up training/testing functions
     output = layer.get_output(network['softmax'])
     cost = lasagne.objectives.categorical_crossentropy(output, y).mean()
@@ -84,6 +88,7 @@ def train_model(hyparams,
     val_cost_fn = lasagne.objectives.categorical_crossentropy(test_output, y).mean()
     preds = T.argmax(test_output, axis=1)
     val_acc_fn = T.mean(T.eq(preds, y), dtype=theano.config.floatX)
+
     print 'compiling functions'
     train_fxn = theano.function([X, M, y], cost, updates=grad_updates, allow_input_downcast=True)
     val_fxn = theano.function([X, M, y], [val_cost_fn, val_acc_fn, preds], allow_input_downcast=True)
@@ -107,8 +112,6 @@ def train_model(hyparams,
             val_acc /= val_batches
             log_file.write('%s\tloss: %.6f\n' % (prefix, val_loss))
             log_file.write('%s\taccuracy: %.3f\n' % (prefix, val_acc * 100.))
-#            log_file.write("%validation loss:\t\t{:.6f}\n".format(val_loss))
-#            log_file.write("\t\tvalidation accuracy:\t\t{:.2f} %\n".format(val_acc * 100.))
             log_file.flush()
         except ZeroDivisionError:
             print('WARNING: val_batches == 0')
@@ -120,10 +123,6 @@ def train_model(hyparams,
     k = hyparams.kfolds
     fold_size = int(round(1. * ntrain / k))
     nbatches = int(round(1. * fold_size / batchsize))
-    # valfreq = max(int(round(nbatches / 4.)), 2)
-    print 'validating every %d batches' % (int(batchsize/2.))
-    # log.write('validating every %d batches\n' % valfreq)
-    log.flush()
     best_val_acc = -np.inf
     start = time.time()
     for epoch in xrange(nepochs):
@@ -131,7 +130,7 @@ def train_model(hyparams,
         train_batches = 0
         epoch_start = time.time()
         fold_count = 0
-        for y_train, X_train in iterate_folds(train_file, ntrain, k):
+        for y_train, X_train in lazy_load(train_file, ntrain, k):
             fold_start = time.time()
             print '[epoch %d fold %d/%d (%d examples)]' % (epoch, fold_count, k, len(y_train))
             fold_count += 1
@@ -158,7 +157,7 @@ def train_model(hyparams,
             print progress
             log.write(progress)
             prefix = '[epoch %d, fold %d]' % (epoch, fold_count)
-            log.write('%s\ttraining loss: %.6f' % (prefix, train_err/train_batches))
+            log.write('%s\ttraining loss: %.6f\n' % (prefix, train_err/train_batches))
             log.flush()
             val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix='%s(VAL)' % prefix)
             if val_acc >= best_val_acc:
@@ -167,7 +166,6 @@ def train_model(hyparams,
             log.write('%s\tcurrent best val accuracy: %.3f\n' % (prefix, best_val_acc * 100.))
             log.flush()
             test_loss, test_acc = compute_val_error(log_file=log, X_val=X_test, y_val=y_test, prefix='%s(TEST)' % prefix)
-            # test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
             log.write('%s\ttest accuracy: %.3f\n' % (prefix, test_acc * 100.))
             log.flush()
         progress = 'epoch %d took %.3f s\n' % (epoch, time.time() - epoch_start)
@@ -175,14 +173,13 @@ def train_model(hyparams,
         log.write(progress)
         log.write('[epoch %d] training loss: %.6f' % (epoch, train_err/train_batches))
         log.flush()
-        val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix='[epoch %d VAL]' % epoch)
+        val_loss, val_acc = compute_val_error(log_file=log, X_val=X_val, y_val=y_val, prefix='[epoch %d](VAL)' % epoch)
         if val_acc >= best_val_acc:
             best_val_acc = val_acc
             write_model_data(network, '%s/best_lstm_model' % log_dir)
         log.write('best validation accuracy: %.4f\n' % (best_val_acc * 100.))
         log.flush()
-        # test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
-        test_loss, test_acc = compute_val_error(log_file=log, X_val=X_test, y_val=y_test, prefix='[epoch %d TEST]' % epoch)
+        test_loss, test_acc = compute_val_error(log_file=log, X_val=X_test, y_val=y_test, prefix='[epoch %d](TEST)' % epoch)
         log.write('test accuracy: %.4f\n' % (test_acc * 100.))
         log.flush()
     progress = 'training took %3f s\n' % (time.time() - start)
@@ -190,7 +187,6 @@ def train_model(hyparams,
     log.write(progress)
     read_model_data(network, '%s/best_lstm_model' % log_dir)
     test_loss, test_acc = compute_val_error(log_file=log, X_val=X_test, y_val=y_test, prefix='FINAL')
-    # test_loss, test_acc, _ = val_fxn(X_test[:, :, 0], X_test[:, :, 1], y_test)
     log.write('final test accuracy: %.4f\n' % (test_acc * 100.))
     log.flush()
     log.close()
@@ -198,47 +194,47 @@ def train_model(hyparams,
 
 
 
-def process_fold(lines):
-    nerrs = 0
-    X, Y = [], []
-    for line in lines:
-        parts = line.strip().split('\t')
-        if len(parts) != 2:
-            nerrs += 1
-            continue
-        y, x = parts[0], parts[1]
-        if len(x) == 0:
-            nerrs += 1
-            continue
-        y = int(y)
-        x = map(int, x.split(' '))
-        x = map(lambda v: v + 1, x)
-        Y.append(y)
-        X.append(x)
-    Y = np.asarray(Y, dtype=np.int32)
-    X = pad_mask(X)
-    return Y, X
-
-
-def iterate_folds(filename, n, k):
-    fold_size = int(round(1. * n / k))
-    print 'fold size: %d' % fold_size
-    fin = open(filename, 'r')
-    while True:
-        i = 0
-        fold = []
-        while i < fold_size:
-            line = fin.readline()
-            i += 1
-            if not line:
-                break
-            fold.append(line)
-        yield process_fold(fold)
-
-
-def load_dataset(filename):
-    lines = open(filename, 'r').readlines()
-    return process_fold(lines)
+# def process_fold(lines):
+#     nerrs = 0
+#     X, Y = [], []
+#     for line in lines:
+#         parts = line.strip().split('\t')
+#         if len(parts) != 2:
+#             nerrs += 1
+#             continue
+#         y, x = parts[0], parts[1]
+#         if len(x) == 0:
+#             nerrs += 1
+#             continue
+#         y = int(y)
+#         x = map(int, x.split(' '))
+#         x = map(lambda v: v + 1, x)
+#         Y.append(y)
+#         X.append(x)
+#     Y = np.asarray(Y, dtype=np.int32)
+#     X = pad_mask(X)
+#     return Y, X
+#
+#
+# def iterate_folds(filename, n, k):
+#     fold_size = int(round(1. * n / k))
+#     print 'fold size: %d' % fold_size
+#     fin = open(filename, 'r')
+#     while True:
+#         i = 0
+#         fold = []
+#         while i < fold_size:
+#             line = fin.readline()
+#             i += 1
+#             if not line:
+#                 break
+#             fold.append(line)
+#         yield process_fold(fold)
+#
+#
+# def load_dataset(filename):
+#     lines = open(filename, 'r').readlines()
+#     return process_fold(lines)
 
 
 if __name__ == '__main__':
@@ -289,24 +285,4 @@ if __name__ == '__main__':
                 model_file=args.model_file)
 
 
-
-# @profile
-# def testit():
-#     filename = '/Users/kate/research/AI2/bibie/all.train'
-#     cmd = 'cat %s | wc -l > tmp' % filename
-#     print cmd
-#     os.system(cmd)
-#     n = int(open('tmp', 'r').read().rstrip('\n'))
-#     print n
-#     cmd = 'rm -v tmp'
-#     os.system(cmd)
-#     k = 20
-#     count = 0
-#     for x, y in iterate_folds(filename, n, k):
-#         print count, len(y)
-#         count += 1
-#
-#
-# if __name__ == '__main__':
-#     testit()
 
