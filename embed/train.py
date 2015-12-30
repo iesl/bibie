@@ -153,6 +153,9 @@ def train_model(hyparams,
                         write_model_data(network, '%s/best_lstm_model' % log_dir)
                     log.write('%s current best val accuracy: %.4f\n' % (prefix, best_val_acc * 100.))
                     log.flush()
+            if fold_count > k+1:
+                print 'WARNING: fold_count=%d but k=%d' % (fold_count, k)
+                break
             progress = '\tepoch %d, fold %d took %.3f s\n' % (epoch, fold_count, time.time() - fold_start)
             print progress
             log.write(progress)
@@ -191,50 +194,6 @@ def train_model(hyparams,
     log.flush()
     log.close()
     return network
-
-
-
-# def process_fold(lines):
-#     nerrs = 0
-#     X, Y = [], []
-#     for line in lines:
-#         parts = line.strip().split('\t')
-#         if len(parts) != 2:
-#             nerrs += 1
-#             continue
-#         y, x = parts[0], parts[1]
-#         if len(x) == 0:
-#             nerrs += 1
-#             continue
-#         y = int(y)
-#         x = map(int, x.split(' '))
-#         x = map(lambda v: v + 1, x)
-#         Y.append(y)
-#         X.append(x)
-#     Y = np.asarray(Y, dtype=np.int32)
-#     X = pad_mask(X)
-#     return Y, X
-#
-#
-# def iterate_folds(filename, n, k):
-#     fold_size = int(round(1. * n / k))
-#     print 'fold size: %d' % fold_size
-#     fin = open(filename, 'r')
-#     while True:
-#         i = 0
-#         fold = []
-#         while i < fold_size:
-#             line = fin.readline()
-#             i += 1
-#             if not line:
-#                 break
-#             fold.append(line)
-#         yield process_fold(fold)
-#
-#
-# def load_dataset(filename):
-#     lines = open(filename, 'r').readlines()
-#     return process_fold(lines)
 
 
 if __name__ == '__main__':
