@@ -22,7 +22,10 @@ def clean_label(label):
 def process_file(filename, labels):
     with open(filename, 'r') as bibfile:
         bibstr = bibfile.read()
-    db = bibtexparser.loads(bibstr)
+    try:
+        db = bibtexparser.loads(bibstr)
+    except Exception:
+        return None
     lines = []
     for entry in db.entries:
         for label, contents in entry.items():
@@ -40,12 +43,17 @@ def process_files(args):
     print labels
     indir = args.indir
     fnames = ['%s/%s' % (indir, f) for f in os.listdir(indir)]
+    skiplist = []
     lines = []
     count = 0
     for f in fnames:
         print 'processing: ', f
-        lines.extend(process_file(f, labels))
-        count += 1
+        processed = process_file(f, labels)
+        if processed:
+            lines.extend(processed)
+            count += 1
+        else:
+            skiplist.append(f)
         if count > 10:
             break
     for label, contents in lines:
