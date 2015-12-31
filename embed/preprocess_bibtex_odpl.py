@@ -18,6 +18,7 @@ def clean_label(label):
     label = re.sub(r'%\s*', '', label)
     return label
 
+
 def process_file(filename, labels):
     with open(filename, 'r') as bibfile:
         bibstr = bibfile.read()
@@ -36,12 +37,17 @@ def process_file(filename, labels):
 
 def process_files(args):
     labels = cPickle.load(open(args.labels, 'r'))
+    print labels
     indir = args.indir
     fnames = ['%s/%s' % (indir, f) for f in os.listdir(indir)]
     lines = []
+    count = 0
     for f in fnames:
+        print 'processing: ', f
         lines.extend(process_file(f, labels))
-        break
+        count += 1
+        if count > 10:
+            break
     for label, contents in lines:
         print label, contents
 
