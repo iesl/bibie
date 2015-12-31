@@ -48,10 +48,11 @@ def process_files(args):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='preprocess bibtex files for document classifier')
-    p.add_argument('--init', required=True, type=int, help='initialize labels/vocab')
+    p.add_argument('--init', required=False, type=int, help='initialize labels/vocab')
     p.add_argument('--indir', required=True, type=str)
     p.add_argument('--outdir', required=True, type=str)
     p.add_argument('--filter-below', type=float, help='filter labels that occur in fewer than this percent of bibs')
+    p.add_argument('--labels', type=str, required=True)
     args = p.parse_args()
     process_files(args)
     
