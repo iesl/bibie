@@ -89,5 +89,6 @@ if __name__ == '__main__':
     p.add_argument('--filter-below', type=float, help='filter labels that occur in fewer than this percent of bibs')
     p.add_argument('--labels', type=str, required=True)
     args = p.parse_args()
-    process_files(args)
+    main(args)
+
     
