@@ -56,7 +56,7 @@ def process_files(filenames, outdir, setid, labels):
         if i % 500 == 0:
             print 'processed ', i, 'files'
     outfile = '%s/%s' % (outdir, '%s.txt' % setid)
-    outf = codecs.open(outfile, 'w', mode='ascii', )
+    outf = codecs.open(outfile, 'w', mode='ascii', errors='ignore')
     for label, contents in lines:
         outf.write('>>>NEWDOC\n')
         outf.write('%s\n' % label)
