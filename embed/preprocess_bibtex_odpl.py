@@ -1,6 +1,7 @@
 import os
 import cPickle
 import argparse
+import codecs
 from collections import defaultdict
 import bibtexparser
 from bibtexparser.bparser import BibTexParser
@@ -37,27 +38,43 @@ def process_file(filename, labels):
             lines.append((label, contents))
     return lines
 
+def get_filenames(indir, filelist_file):
+    filelist = []
+    with open(filelist_file, 'r') as f:
+        for line in f:
+            filelist.append(line.rstrip('\n'))
+    filelist = set(filelist)
+    files = ['%s/%s' % (indir, f) for f in os.listdir(indir) if f in filelist]
+    return files
 
-def process_files(args):
-    labels = cPickle.load(open(args.labels, 'r'))
-    print labels
-    indir = args.indir
-    fnames = ['%s/%s' % (indir, f) for f in os.listdir(indir)]
-    skiplist = []
+def process_files(filenames, outdir, setid, labels):
     lines = []
-    for f in fnames:
+    for i, f in enumerate(filenames):
         processed = process_file(f, labels)
         if processed:
             lines.extend(processed)
-        else:
-            skiplist.append(f)
-    print len(skiplist), 'errors'
-    outfile = '%s/%s' % (args.outdir, 'odpl.txt')
-    outf = open(outfile, 'w')
+        if i % 500 == 0:
+            print 'processed ', i, 'files'
+    outfile = '%s/%s' % (outdir, '%s.txt' % setid)
+    outf = codecs.open(outfile, 'w', mode='ascii', )
     for label, contents in lines:
-        line = '%s\t%s\n' % (label, contents)
-        outf.write(line)
+        outf.write('>>>NEWDOC\n')
+        outf.write('%s\n' % label)
+        outf.write('%s\n' % contents)
     outf.close()
+
+def main(args):
+    labels = cPickle.load(open(args.labels, 'r'))
+    print labels
+    indir = args.indir
+    outdir = args.outdir
+    trainfiles = get_filenames(indir, args.trainlist)
+    process_files(trainfiles, outdir, 'train', labels)
+    devfiles = get_filenames(indir, args.devlist)
+    process_files(devfiles, outdir, 'dev', labels)
+    testfiles = get_filenames(indir, args.testlist)
+    process_files(testfiles, outdir, 'test', labels)
+
 
 
 
@@ -65,6 +82,9 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description='preprocess bibtex files for document classifier')
     p.add_argument('--init', required=False, type=int, help='initialize labels/vocab')
     p.add_argument('--indir', required=True, type=str)
+    p.add_argument('--trainlist', type=str, required=True)
+    p.add_argument('--devlist', type=str, required=True)
+    p.add_argument('--testlist', type=str, required=True)
     p.add_argument('--outdir', required=True, type=str)
     p.add_argument('--filter-below', type=float, help='filter labels that occur in fewer than this percent of bibs')
     p.add_argument('--labels', type=str, required=True)
