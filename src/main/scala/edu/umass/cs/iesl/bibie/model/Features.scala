@@ -34,6 +34,9 @@ class Features(val lexicons: Lexicons) {
   val HasClosedSquare = ".*\\].*"
   val ContainsDigit = ".*[0-9].*".r
 
+  val AuthorName = "[A-Z]\\w+"
+  val AuthorInitial = "[A-Z][A-Z]?.?$"
+
   var loc = 0
 
   // TODO: add some global features to baseline CRF - like "containsthesis"
@@ -45,6 +48,8 @@ class Features(val lexicons: Lexicons) {
 //    if(preFeats != null) features ++= preFeats.features
     assert(token.document.attr[CitationSpanList] != null, "OverSegmenter has not been run on this document yet (token.document lacks attr CitationSpanList)")
     val docSpans = token.document.attr[CitationSpanList].spans
+    val spanStarts = docSpans.map(span => span.start)
+    val spanEnds = docSpans.map(span => span.end)
     val word = token.string
     val email = """([\w\d\-\_]+)(\+\d+)?@([\w\d\-\.]+)"""
     val url = """((http|ftp|https):\/\/)?[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?"""
@@ -53,6 +58,7 @@ class Features(val lexicons: Lexicons) {
     features += "W=" + word
     features += "SIMPLE=" + simplifyDigits(word)
     features += "SIMPLE_LOWER=" + simplifyDigits(word).toLowerCase
+
     if (word.length > 3) features += "PRE=" + word.substring(0, 3)
     if (word.matches(Capitalized)) features += "CAPITALIZED"
     if (word.matches(AllCaps)) features += "ALLCAPS"
@@ -68,8 +74,6 @@ class Features(val lexicons: Lexicons) {
     if (word.matches("[A-Z]\\.")) features += "LONLEYINITIAL"
     if (word.matches(email)) features += "EMAIL"
     if (word.matches(url)) features += "URL"
-    if (word.matches(EndComma)) features += "ENDCOMMA"
-    if (word.matches(EndPeriod)) features += "ENDPERIOD"
     if (word.matches(EndFullColon)) features += "ENDFULLCOLON"
     if (word.matches(HasOpenParen)) features += "OPENPAREN"
     if (word.matches(HasClosedParen)) features += "CLOSEDPAREN"
@@ -100,7 +104,8 @@ class Features(val lexicons: Lexicons) {
     //if (word.matches(ParenNumeric) && counts._1 == 4 && word.replaceFirst("\\).?$",")").replaceAll("[\\)\\(]","").toInt < 1900) features += "BEFORE1900"
     //if (word.matches(ParenNumeric) && counts._1 == 4 && word.replaceFirst("\\).?$",")").replaceAll("[\\)\\(]","").toInt >= 1900) features += "AFTER1900"
     if (lower.startsWith("appeared") || lower.startsWith("submitted") || lower.startsWith("appear")) features += "STATUS"
-    //if(token.startsSpansOfClass[SegmentSpan].nonEmpty) features += "PROBABLESEGMENT"
+//    if (token.startsSpansOfClass[SegmentSpan].nonEmpty) features += "PROBABLESEGMENT"
+
     if (docSpans.exists(span => span.tokens.head == token)) features += "PROBABLESEGMENT"
     if (lower.matches("(ed\\.|eds\\.|editor|editors).*")) features += "EDITOR"
     if (lower.matches("(proc\\.?|proceedings|trans\\.?|conf\\.?|symp\\.?|conference|symposium|workshop).*")) features += "BOOKTITLE"
@@ -108,6 +113,31 @@ class Features(val lexicons: Lexicons) {
     if (lower.matches("^p(p|ages|pps|gs)?\\.?")) features += "ISPAGES"
     if (lower.matches("(v\\.?|volume|vol\\.?).*")) features += "VOLUME"
     loc += 1
+
+    /* added 30 dec 7:55 pm */
+    val pos = token.position.toDouble
+    val len = token.sentence.length.toDouble
+    val relpos = pos / len
+    if (relpos < 0.25) features += s"RELPOS_LT_P25"
+    else if (relpos < 0.5) features += s"RELPOS_LT_P50"
+    else if (relpos < 0.75) features += s"RELPOS_LT_P75"
+    else features += s"RELPOS_LT_P100"
+
+    if (word.matches(EndComma)) features += "ENDCOMMA"
+    if (word.matches(EndPeriod)) features += "ENDPERIOD"
+    if (word.matches(EndComma) || word.matches(EndPeriod) || word.equals(".") || word.equals(",")) {
+      if (token.hasPrev && relpos <= 0.5) {
+        val prev = token.prev
+        val prevStr = prev.string
+        if (prevStr.matches(AuthorInitial)) features += "AuthorSegWithInitials"
+        if (prevStr.matches(AuthorName)) features += "AuthorSeg"
+      }
+    }
+
+    /* added 30 dec 8:50 pm */
+    if (spanStarts.contains(token.position)) features += "SegmentStart"
+    if (spanEnds.contains(token.position)) features += "SegmentEnd"
+
     token.attr += features
   }
 
@@ -123,11 +153,11 @@ class Features(val lexicons: Lexicons) {
 
   def initSentenceFeatures(d: Document): Unit = {
     val docLength = d.tokens.size
-    for (token <- d.tokens) {
-      val per = token.position.toDouble / docLength.toDouble
-      val binned = ((per * 60.0) / 5.0).floor
-      token.attr[CitationFeatures] += "BIN=" + binned
-    }
+//    for (token <- d.tokens) {
+//      val per = token.position.toDouble / docLength.toDouble
+//      val binned = ((per * 60.0) / 5.0).floor
+//      token.attr[CitationFeatures] += "BIN=" + binned
+//    }
 
     for (t <- d.tokens) {
       if (t.nextWindow(10).count(_.string.toLowerCase.matches(".*(ed\\.|editor|eds|editors).*")) > 0) t.attr[CitationFeatures] += "POSSIBLEEDITOR"

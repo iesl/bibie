@@ -1,20 +1,19 @@
 package edu.umass.cs.iesl.bibie.model
 
-/**
- * Created by kate on 10/13/15.
- */
+import java.io.{PrintWriter, FileOutputStream, File}
+import java.util.logging.Logger
 
-import cc.factorie.app.nlp.Document
 import cc.factorie.util.HyperparameterMain
+import cc.factorie.app.nlp._
 
 import edu.umass.cs.iesl.bibie.BibieOptions
-import edu.umass.cs.iesl.bibie.load._
+import edu.umass.cs.iesl.bibie.load.{LoadHier, LoadGrobid}
 import edu.umass.cs.iesl.bibie.segment.OverSegmenter
 
-import java.util.logging.Logger
-import java.io._
-
-object CitationTaggerTrainer extends HyperparameterMain {
+/**
+ * Created by kate on 12/28/15.
+ */
+object CitationTaggerWithCETrainer extends HyperparameterMain {
 
   private val logger = Logger.getLogger(getClass.getName)
 
@@ -22,7 +21,7 @@ object CitationTaggerTrainer extends HyperparameterMain {
     val opts = new BibieOptions
     opts.parse(args)
     println("ARGS:")
-    println(opts.unParse.mkString("\n"))
+    println(opts.unParse.mkString(", "))
     opts.taggerType.value match {
       case "default" => trainDefault(opts)
       case "grobid" => trainGrobid(opts)
@@ -37,36 +36,46 @@ object CitationTaggerTrainer extends HyperparameterMain {
     val useGrobid = opts.useGrobid.value
     val trainDocs = if (useGrobid) LoadGrobid.fromFilename(opts.trainFile.value) else LoadHier.fromFile(opts.trainFile.value)
     val devDocs = if (useGrobid) LoadGrobid.fromFilename(opts.testFile.value) else LoadHier.fromFile(opts.devFile.value)
-//    val trainDocs = LoadHier.fromFile(opts.trainFile.value)
-//    val devDocs = LoadHier.fromFile(opts.devFile.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
-    val tagger = new DefaultCitationTagger(lexiconDir)
+    println(s"loading embeddings from ${opts.embeddingsFile.value}")
+    val embeddingMap = CharEmbedding(opts.embeddingsFile.value, opts.vocabFile.value, opts.embeddingDim.value)
+    val tagger = new DefaultCitationTaggerWithCE(lexiconDir,
+      embeddingMap,
+      opts.embeddingDim.value,
+      opts.scale.value,
+      useOffsetEmbedding = true)
     val trainEval = tagger.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
     devDocs.foreach(tagger.process)
     writeDecisions(devDocs, opts.outputFile.value)
-    if (opts.saveModel.value) {
-      logger.info(s"serializing model to ${opts.modelFile.value}")
-      tagger.serialize(new FileOutputStream(opts.modelFile.value))
-    }
+//    if (opts.saveModel.value) {
+//      logger.info(s"serializing model to ${opts.modelFile.value}")
+//      tagger.serialize(new FileOutputStream(opts.modelFile.value))
+//    }
     trainEval
   }
 
   def trainGrobid(opts: BibieOptions): Double = {
     implicit val random = new scala.util.Random(0)
     val params = new Hyperparams(opts)
-    val tagger = new GrobidCitationTagger
+    println(s"loading embeddings from ${opts.embeddingsFile.value}")
+    val embeddingMap = CharEmbedding(opts.embeddingsFile.value, opts.vocabFile.value, opts.embeddingDim.value)
+    val tagger = new GrobidCitationTaggerWithCE(
+      embeddingMap,
+      opts.embeddingDim.value,
+      opts.scale.value,
+      useOffsetEmbedding = true)
     val trainDocs = LoadGrobid.fromFilename(opts.trainFile.value)
     val devDocs = LoadGrobid.fromFilename(opts.devFile.value)
     val trainEval = tagger.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
     devDocs.foreach(tagger.process)
     writeDecisions(devDocs, opts.outputFile.value)
-    if (opts.saveModel.value) {
-      logger.info(s"serializing model to ${opts.modelFile.value}")
-      tagger.serialize(new FileOutputStream(opts.modelFile.value))
-    }
+    //    if (opts.saveModel.value) {
+    //      logger.info(s"serializing model to ${opts.modelFile.value}")
+    //      tagger.serialize(new FileOutputStream(opts.modelFile.value))
+    //    }
     trainEval
   }
 
@@ -77,15 +86,21 @@ object CitationTaggerTrainer extends HyperparameterMain {
     val devDocs = LoadGrobid.fromFilename(opts.devFile.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
-    val tagger = new CombinedCitationTagger(lexiconDir)
+    println(s"loading embeddings from ${opts.embeddingsFile.value}")
+    val embeddingMap = CharEmbedding(opts.embeddingsFile.value, opts.vocabFile.value, opts.embeddingDim.value)
+    val tagger = new CombinedCitationTaggerWithCE(lexiconDir,
+      embeddingMap,
+      opts.embeddingDim.value,
+      opts.scale.value,
+      useOffsetEmbedding = true)
     val trainEval = tagger.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
     devDocs.foreach(tagger.process)
     writeDecisions(devDocs, opts.outputFile.value)
-    if (opts.saveModel.value) {
-      logger.info(s"serializing model to ${opts.modelFile.value}")
-      tagger.serialize(new FileOutputStream(opts.modelFile.value))
-    }
+//    if (opts.saveModel.value) {
+//      logger.info(s"serializing model to ${opts.modelFile.value}")
+//      tagger.serialize(new FileOutputStream(opts.modelFile.value))
+//    }
     trainEval
   }
 
@@ -105,3 +120,4 @@ object CitationTaggerTrainer extends HyperparameterMain {
   }
 
 }
+

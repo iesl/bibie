@@ -11,6 +11,8 @@ import cc.factorie.app.nlp._
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
+import scala.io.Codec
+import java.nio.charset.CodingErrorAction
 
 /**
  * Infrastructure for comparison of GROBID vs IESL.
@@ -46,19 +48,19 @@ object LoadGrobid {
     Array()
   }
 
-  def fromFilenameWithGrobidResults(filename: String): Seq[Document] = {
+  def cleanLabel(label: String): String = {
+    val clean = label.dropRight(1) //take off the ending bracket
+    val result = if (clean.startsWith("I-<")) {
+        val newLabel = clean.drop(3)
+        "B-" + newLabel
+      } else {
+        val newLabel = clean.drop(1)
+        "I-" + newLabel
+      }
+    result
+  }
 
-    def cleanLabel(label: String): String = {
-      val clean = label.dropRight(1) //take off the ending bracket
-      val result = if (clean.startsWith("I-<")) {
-          val newLabel = clean.drop(3)
-          "B-" + newLabel
-        } else {
-          val newLabel = clean.drop(1)
-          "I-" + newLabel
-        }
-      result
-    }
+  def fromFilenameWithGrobidResults(filename: String): Seq[Document] = {
 
     println(s"Loading data from $filename ...")
     val whitespace = "\\s+".r
@@ -80,10 +82,10 @@ object LoadGrobid {
         val grobidLabel = parts(len-1)
         val goldLabel = parts(len-2)
         val cleanGold = cleanLabel(goldLabel)
-        assert(CitationLabelDomain.categories.contains(cleanGold), s"gold category $cleanGold not in domain")
+//        assert(CitationLabelDomain.categories.contains(cleanGold), s"gold category $cleanGold not in domain")
 
         val cleanResult = cleanLabel(grobidLabel)
-        assert(CitationLabelDomain.categories.contains(cleanResult), s"result category $cleanResult not in domain")
+//        assert(CitationLabelDomain.categories.contains(cleanResult), s"result category $cleanResult not in domain")
 
         val string = parts.head
         val token = new Token(currSent, string)
@@ -154,6 +156,55 @@ object LoadGrobid {
           currSent = new Sentence(currDoc)
           docCount += 1
         }
+      }
+    }
+    println(s"Loaded $docCount docs with $tokenCount tokens from file $filename.")
+    buff
+  }
+
+  def fromFilenameWithResults2(filename: String): Seq[Document] = {
+    implicit val codec = Codec("UTF-8")
+    codec.onMalformedInput(CodingErrorAction.REPLACE)
+    codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
+    case class TmpLabel(token: Token, gold: String, guess: String)
+    println(s"Loading data from $filename ...")
+    val whitespace = "\\s+".r
+    val buff = new ArrayBuffer[Document]()
+    var currDoc = new Document("")
+    var currSent = new Sentence(currDoc)
+    val src = Source.fromFile(filename)
+    val lines = src.getLines()
+    var tokenCount = 0
+    var docCount = 0
+    while (lines.hasNext) {
+      val line = lines.next()
+      val parts = line.split("\t")
+      if (parts.length > 1) {
+        val string = parts.head
+        val len = parts.length
+        val predLabel = cleanLabel(parts(len-1).trim)
+        val goldLabel = cleanLabel(parts(len-2))
+        val token = new Token(currSent, string)
+        token.attr += new CitationLabel(goldLabel, token)
+        token.attr += new TmpLabel(token, goldLabel, predLabel)
+        tokenCount += 1
+      } else {
+        if (currSent.length > 0) currDoc.appendString("")
+        if (currDoc.tokenCount > 0) {
+          buff += currDoc
+          currDoc = new Document("")
+          currSent = new Sentence(currDoc)
+          docCount += 1
+        }
+      }
+    }
+    CitationLabelDomain.freeze()
+    buff.foreach { doc =>
+      doc.tokens.foreach { token =>
+        val tmp = token.attr[TmpLabel]
+        val tag = token.attr[CitationLabel]
+        tag.set(CitationLabelDomain.index(tmp.guess))(null)
+        token.attr.remove[TmpLabel]
       }
     }
     println(s"Loaded $docCount docs with $tokenCount tokens from file $filename.")

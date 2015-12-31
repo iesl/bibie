@@ -12,6 +12,7 @@ import cc.factorie.app.chain._
 import cc.factorie.util.BinarySerializer
 import edu.umass.cs.iesl.bibie.evaluate.SegmentationEvaluation
 import edu.umass.cs.iesl.bibie.util.DefaultLexicons
+import scala.collection.mutable.HashMap
 
 
 abstract class AbstractCitationTagger extends DocumentAnnotator {
@@ -65,13 +66,17 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
     val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])
     val examples = vars.map(v => new LikelihoodExample(v.toSeq, model, cc.factorie.infer.InferByBPChain))
     val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+    var iterCount = 0
     def evaluate(): Unit = {
+      iterCount += 1
       trainDocuments.foreach(process)
       testDocuments.foreach(process)
-      evaluator.printEvaluation(trainDocuments, extra = "TRAIN")
-      evaluator.segmentationEvaluation(trainDocuments, extra = "TRAIN")
-      evaluator.printEvaluation(testDocuments, extra = "DEV")
-      evaluator.segmentationEvaluation(testDocuments, extra = "DEV")
+      evaluator.printEvaluation(trainDocuments, extra = s"TRAIN($iterCount)")
+      evaluator.segmentationEvaluation(trainDocuments, extra = s"TRAIN($iterCount)")
+      evaluator.printEvaluation(testDocuments, extra = s"DEV($iterCount)")
+      evaluator.segmentationEvaluation(testDocuments, extra = s"DEV($iterCount)")
+      println(top10weights(extra = s"$iterCount"))
+
     }
     params.optimizer match {
       case "lbfgs" =>
@@ -79,17 +84,40 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
         val trainer = new ThreadLocalBatchTrainer(model.parameters, optimizer)
         trainer.trainFromExamples(examples)
       case "adagrad" =>
-        val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
+        val optimizer = new AdaGrad(delta=params.delta, rate=params.rate) with ParameterAveraging
+//        val optimizer = new AdaGradRDA(delta=params.delta, rate=params.rate, l1=params.l1, l2=params.l2, numExamples=examples.length)
         Trainer.onlineTrain(model.parameters, examples, evaluate=evaluate, useParallelTrainer=false, maxIterations=params.numIterations, optimizer=optimizer)
       case _ => throw new Exception(s"invalid optimizer: ${params.optimizer}")
     }
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
     trainDocuments.foreach(process)
     testDocuments.foreach(process)
+    println(top10weights(extra = "final"))
     evaluator.segmentationEvaluation(trainDocuments, extra = "TRAIN")
     evaluator.printEvaluation(trainDocuments, extra = "TRAIN")
     evaluator.segmentationEvaluation(testDocuments, extra = "DEV")
     evaluator.printEvaluation(testDocuments, extra = "DEV")
+  }
+
+  def top10weights(extra: String = ""): String = {
+    val sb = new StringBuilder
+    sb.append(s"* * * weights ($extra) * * *\n")
+    val nfeatures = model.obs.weights.value.dimensions.apply(0)
+    val nclasses = model.obs.weights.value.dimensions.apply(1)
+    for (i <- 0 to nclasses - 1) {
+      val label = CitationLabelDomain.category(i)
+      val m = new HashMap[String,Double]()
+      for (j <- 0 to CitationFeaturesDomain.dimensionDomain.size - 1) {
+        m.put(CitationFeaturesDomain.dimensionDomain.apply(j).toString(), model.obs.weights.value.apply(i, j))
+      }
+      val srt = m.toList.sortBy { case (featureName, weight) => weight }.reverse
+      sb.append(s"* * top weights for class $label * *\n")
+      for (j <- 0 to math.min(srt.length, 10)) {
+        sb.append(s"\t${srt(j)._2}\t${srt(j)._1}\n")
+      }
+      sb.append("\n")
+    }
+    sb.toString()
   }
 
   def serialize(stream: OutputStream) {

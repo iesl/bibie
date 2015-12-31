@@ -25,6 +25,7 @@ package object bibie {
     val trainFile = new CmdOption("train-file", "", "STRING", "UMass formatted training file.")
     val devFile = new CmdOption("dev-file", "", "STRING", "UMass formatted dev file.")
     val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted test file.")
+    val useGrobid = new CmdOption[Boolean]("use-grobid", true, "BOOLEAN", "for default tagger, expect Grobid data?")
 
     val rootPath = new CmdOption[String]("root-path", "", "STRING", "path to directory where you want to save things")
 
@@ -50,6 +51,15 @@ package object bibie {
     val l1 = new CmdOption("l1", 0.1, "FLOAT", "l1 regularizer strength")
     val l2 = new CmdOption("l2", 0.1, "FLOAT", "l2 regularizer strength")
     val numIterations = new CmdOption("num-iterations", 5, "INT", "Number of training iterations")
+
+    /* embeddings */
+    val embeddingsFile = new CmdOption[String]("embeddings-file", "", "STRING", "embeddings file")
+    val vocabFile = new CmdOption[String]("vocab-file", "", "STRING", "vocab file")
+    val embeddingDim = new CmdOption[Int]("embedding-dim", 0, "INT", "embedding dim")
+    val scale = new CmdOption[Double]("scale", 1.0, "FLOAT", "scale")
+
+    /* error analysis */
+    val outputFile = new CmdOption[String]("output-file", "", "STRING", "write token-level decisions to this file")
   }
 
   implicit class DocumentExtras(doc: Document) {
