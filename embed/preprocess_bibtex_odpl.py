@@ -45,19 +45,20 @@ def process_files(args):
     fnames = ['%s/%s' % (indir, f) for f in os.listdir(indir)]
     skiplist = []
     lines = []
-    count = 0
     for f in fnames:
-        print 'processing: ', f
         processed = process_file(f, labels)
         if processed:
             lines.extend(processed)
-            count += 1
         else:
             skiplist.append(f)
-        if count > 10:
-            break
+    print len(skiplist), 'errors'
+    outfile = '%s/%s' % (args.outdir, 'odpl.txt')
+    outf = open(outfile, 'w')
     for label, contents in lines:
-        print label, contents
+        line = '%s\t%s\n' % (label, contents)
+        outf.write(line)
+    outf.close()
+
 
 
 if __name__ == '__main__':
