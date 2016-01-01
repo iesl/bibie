@@ -38,15 +38,16 @@ def process_file(filename, outdir, labels):
             lines.append((label, contents))
     outf = open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w')
     for label, contents in lines:
-        try:
-            nlines = len(contents.split('\n'))
-            outf.write('%s %d\n' % (label, nlines))
-            outf.write('%s\n' % contents)
-            outf.write('\n')
-        except Exception:
-            continue
+        if len(contents) > 0:
+            try:
+                nlines = len(contents.split('\n'))
+                outf.write('%s %d\n' % (label, nlines))
+                outf.write('%s\n' % contents)
+                outf.write('\n')
+            except Exception:
+                continue
     outf.close()
-    # return lines
+    
 
 def get_filenames(indir, filelist_file):
     filelist = []
