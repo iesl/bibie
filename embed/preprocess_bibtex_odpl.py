@@ -36,18 +36,18 @@ def process_file(filename, outdir, labels):
             if label not in labels:
                 continue
             lines.append((label, contents))
-    outf = open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w')
+    outf = codecs.open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w')
     for label, contents in lines:
         if len(contents) > 0:
             try:
                 nlines = len(contents.split('\n'))
                 outf.write('%s %d\n' % (label, nlines))
                 outf.write('%s\n' % contents)
-                outf.write('\n')
+                outf.write('<END>\n\n')
             except Exception:
                 continue
     outf.close()
-    
+
 
 def get_filenames(indir, filelist_file):
     filelist = []
