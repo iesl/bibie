@@ -36,17 +36,30 @@ def process_file(filename, outdir, labels):
             if label not in labels:
                 continue
             lines.append((label, contents))
-    outf = codecs.open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w', errors='replace')
+    prefix = '%s/%s.proc' % (outdir, filename.split('/')[-1])
+    count = 0
     for label, contents in lines:
-        if len(contents) > 0:
+        outfname = '%s.%d' % (prefix, count)
+        count += 1
+        with codecs.open(outfname, 'w') as f:
             try:
                 nlines = len(contents.split('\n'))
-                outf.write('%s %d\n' % (label, nlines))
-                outf.write('%s\n' % contents)
-                outf.write('<END>\n\n')
+                f.write('%s %d\n' % (label, nlines))
+                f.write('%s\n' % contents)
             except Exception:
                 continue
-    outf.close()
+
+    # outf = codecs.open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w', errors='replace')
+    # for label, contents in lines:
+    #     if len(contents) > 0:
+    #         try:
+    #             nlines = len(contents.split('\n'))
+    #             outf.write('%s %d\n' % (label, nlines))
+    #             outf.write('%s\n' % contents)
+    #             outf.write('<END>\n\n')
+    #         except Exception:
+    #             continue
+    # outf.close()
 
 
 def get_filenames(indir, filelist_file):
@@ -82,7 +95,7 @@ def main(args):
     process_files(testfiles, outdir, 'test', labels)
 
 
-
+# /iesl/canvas/ksilvers/bibie-exec/bibie/clean_bibtex/dev/coccinelle.lip6.fr#coccinelle.bib.proc
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='preprocess bibtex files for document classifier')
