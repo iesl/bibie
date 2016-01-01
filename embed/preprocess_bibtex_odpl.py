@@ -55,13 +55,19 @@ def process_files(filenames, outdir, setid, labels):
             lines.extend(processed)
         if i % 500 == 0:
             print 'processed ', i, 'files'
+    nerrs = 0
     outfile = '%s/%s' % (outdir, '%s.txt' % setid)
     outf = codecs.open(outfile, 'w', errors='ignore')
     for label, contents in lines:
-        outf.write('>>>NEWDOC\n')
-        outf.write('%s\n' % label)
-        outf.write('%s\n' % contents)
+        try:
+            outf.write('>>>NEWDOC\n')
+            outf.write('%s\n' % label)
+            outf.write('%s\n' % contents)
+        except Exception:
+            nerrs += 1
+            continue
     outf.close()
+    print 'errors:', nerrs
 
 def main(args):
     labels = cPickle.load(open(args.labels, 'r'))
