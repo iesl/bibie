@@ -20,7 +20,7 @@ def clean_label(label):
     return label
 
 
-def process_file(filename, labels):
+def process_file(filename, outdir, labels):
     with open(filename, 'r') as bibfile:
         bibstr = bibfile.read()
     try:
@@ -36,7 +36,16 @@ def process_file(filename, labels):
             if label not in labels:
                 continue
             lines.append((label, contents))
-    return lines
+    outf = open('%s/%s.proc' % (filename.split('/')[-1], outdir), 'w')
+    for label, contents in lines:
+        try:
+            outf.write('%s\n' % label)
+            outf.write('%s\n' % contents)
+            outf.write('\n')
+        except Exception:
+            continue
+    outf.close()
+    # return lines
 
 def get_filenames(indir, filelist_file):
     filelist = []
@@ -50,24 +59,10 @@ def get_filenames(indir, filelist_file):
 def process_files(filenames, outdir, setid, labels):
     lines = []
     for i, f in enumerate(filenames):
-        processed = process_file(f, labels)
-        if processed:
-            lines.extend(processed)
+        process_file(f, outdir, labels)
         if i % 500 == 0:
-            print 'processed ', i, 'files'
-    nerrs = 0
-    outfile = '%s/%s' % (outdir, '%s.txt' % setid)
-    outf = codecs.open(outfile, 'w', errors='ignore')
-    for label, contents in lines:
-        try:
-            outf.write('>>>NEWDOC\n')
-            outf.write('%s\n' % label)
-            outf.write('%s\n' % contents)
-        except Exception:
-            nerrs += 1
-            continue
-    outf.close()
-    print 'errors:', nerrs
+            print 'processed', i, 'files'
+
 
 def main(args):
     labels = cPickle.load(open(args.labels, 'r'))
