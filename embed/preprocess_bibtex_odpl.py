@@ -36,7 +36,7 @@ def process_file(filename, outdir, labels):
             if label not in labels:
                 continue
             lines.append((label, contents))
-    outf = open('%s/%s.proc' % (filename.split('/')[-1], outdir), 'w')
+    outf = open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w')
     for label, contents in lines:
         try:
             outf.write('%s\n' % label)
