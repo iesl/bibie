@@ -36,7 +36,7 @@ def process_file(filename, outdir, labels):
             if label not in labels:
                 continue
             lines.append((label, contents))
-    outf = codecs.open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w')
+    outf = codecs.open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w', errors='replace')
     for label, contents in lines:
         if len(contents) > 0:
             try:
