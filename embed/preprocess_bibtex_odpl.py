@@ -57,7 +57,10 @@ def get_filenames(indir, filelist_file):
     return files
 
 def process_files(filenames, outdir, setid, labels):
-    lines = []
+    outdir = '%s/%s' % (outdir, setid)
+    cmd = 'mkdir -pv %s' % outdir
+    print cmd
+    os.system(cmd)
     for i, f in enumerate(filenames):
         process_file(f, outdir, labels)
         if i % 500 == 0:
