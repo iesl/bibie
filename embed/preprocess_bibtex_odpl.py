@@ -39,7 +39,8 @@ def process_file(filename, outdir, labels):
     outf = open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w')
     for label, contents in lines:
         try:
-            outf.write('%s\n' % label)
+            nlines = len(contents.split('\n'))
+            outf.write('%s %d\n' % (label, nlines))
             outf.write('%s\n' % contents)
             outf.write('\n')
         except Exception:
