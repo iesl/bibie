@@ -58,15 +58,6 @@ object CitationTaggerTrainer extends HyperparameterMain {
         }
       }
     }
-    if (fixed) {
-      println("before:")
-      println(sb.toString())
-      println("after:")
-      doc.tokens.foreach { token =>
-        val label = token.attr[CitationLabel]
-        println(s"${label.target.categoryValue}\t${label.categoryValue}\t${token.string}")
-      }
-    }
     fixed
   }
 
@@ -95,8 +86,8 @@ object CitationTaggerTrainer extends HyperparameterMain {
       evaluator.printEvaluation(devDocs, extra = s"dev (fixed)")
       evaluator.segmentationEvaluation(devDocs, extra = s"dev (fixed)")
       println(s"\nfixed $fixes documents")
+      writeDecisions(devDocs, opts.outputFile.value + ".fixed")
     }
-    writeDecisions(devDocs, opts.outputFile.value + ".fixed")
     trainEval
   }
 
