@@ -73,7 +73,7 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
 
     testDocuments.foreach(doc => addFeatures(doc, training = false))
     // Get the variables to be inferred (for now, just operate on a subset)
-    val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel])
+    val trainLabels: Seq[CitationLabel] = scala.util.Random.shuffle(trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel]))
     val testLabels: Seq[CitationLabel] = testDocuments.flatMap(_.tokens).map(_.attr[CitationLabel])
     (trainLabels ++ testLabels).filter(_ != null).foreach(_.setRandomly(random))
     val vars = for (td <- trainDocuments; sentence <- td.sentences if sentence.length > 1) yield sentence.tokens.map(_.attr[CitationLabel])

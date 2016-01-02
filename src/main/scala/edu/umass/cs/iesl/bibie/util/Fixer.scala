@@ -29,21 +29,21 @@ object Fixer {
         tok.attr.remove[Tmp]
       }
     }
-    docs.take(4).foreach { d =>
-      d.tokens.foreach {t =>
-        val l = t.attr[CitationLabel]
-        val corr = if (l.valueIsTarget) "" else "*"
-        println(s"$corr ${t.string} ${l.target.categoryValue} ${l.categoryValue}")
-      }
-      println("")
-    }
+//    docs.take(4).foreach { d =>
+//      d.tokens.foreach {t =>
+//        val l = t.attr[CitationLabel]
+//        val corr = if (l.valueIsTarget) "" else "*"
+//        println(s"$corr ${t.string} ${l.target.categoryValue} ${l.categoryValue}")
+//      }
+//      println("")
+//    }
 
     val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
     evaluator.printEvaluation(docs, extra = "before")
     evaluator.segmentationEvaluation(docs, extra = "before")
     val fixed = docs.count(fixAuthorSegments)
     println(s"fixed $fixed docs")
-    docs.take(4).foreach { d =>
+    docs.foreach { d =>
       d.tokens.foreach {t =>
         val l = t.attr[CitationLabel]
         val corr = if (l.valueIsTarget) "" else "*"
@@ -108,6 +108,12 @@ object Fixer {
     pw.close()
   }
 
+  /**
+   * A . Cau , R . Kuiper , and W . - P . de Roever|.|
+   * Schaal , S . , & Atkeson , C .|
+   * @param doc
+   * @return
+   */
   def fixAuthorSegments(doc: Document): Boolean = {
     var fixed = false
     val sb = new StringBuilder()
@@ -130,7 +136,12 @@ object Fixer {
         val next = lastTok.next
         if (next.string.equals(".")) {
           fixed = true
-          next.attr[CitationLabel].set(CitationLabelDomain.index("I-author"))(null)
+          val lastStr = lastTok.string
+          if (lastStr.length <= 2 && lastStr.forall(c => c.isUpper)) {
+            next.attr[CitationLabel].set(CitationLabelDomain.index("I-author"))(null)
+          } else {
+            next.attr[CitationLabel].set(CitationLabelDomain.index("B-other"))(null)
+          }
         }
       }
     }
