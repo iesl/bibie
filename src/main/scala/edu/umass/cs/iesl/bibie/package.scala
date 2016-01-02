@@ -27,6 +27,10 @@ package object bibie {
     val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted test file.")
     val useGrobid = new CmdOption[Boolean]("use-grobid", true, "BOOLEAN", "for default tagger, expect Grobid data?")
 
+    val trainDir = new CmdOption[String]("train-dir", "", "STRING", "path to train dir")
+    val devDir = new CmdOption[String]("dev-dir", "", "STRING", "path to dev dir")
+    val testDir = new CmdOption[String]("test-dir", "", "STRING", "path to test dir")
+
     val rootPath = new CmdOption[String]("root-path", "", "STRING", "path to directory where you want to save things")
 
     val saveModel = new CmdOption[Boolean]("save-model", true, "BOOLEAN", "whether or not to save the model")
@@ -51,6 +55,7 @@ package object bibie {
     val l1 = new CmdOption("l1", 0.1, "FLOAT", "l1 regularizer strength")
     val l2 = new CmdOption("l2", 0.1, "FLOAT", "l2 regularizer strength")
     val numIterations = new CmdOption("num-iterations", 5, "INT", "Number of training iterations")
+    val trimBelow = new CmdOption[Int]("trim-below", 0, "INT", "trim features appearing fewer than this many times")
 
     /* embeddings */
     val embeddingsFile = new CmdOption[String]("embeddings-file", "", "STRING", "embeddings file")
@@ -60,6 +65,9 @@ package object bibie {
 
     /* error analysis */
     val outputFile = new CmdOption[String]("output-file", "", "STRING", "write token-level decisions to this file")
+
+    /* misc */
+    val fixAuthorSegments = new CmdOption[Boolean]("fix-author-segments", false, "BOOLEAN", "fix author segments using rule-based strategy")
   }
 
   implicit class DocumentExtras(doc: Document) {

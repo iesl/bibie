@@ -2,7 +2,7 @@ package edu.umass.cs.iesl.bibie.util
 
 import java.io.{File, PrintWriter}
 
-import cc.factorie.app.nlp.Document
+import cc.factorie.app.nlp.{Token, Document}
 import edu.umass.cs.iesl.bibie.evaluate.SegmentationEvaluation
 import edu.umass.cs.iesl.bibie.load.LoadGrobid
 import edu.umass.cs.iesl.bibie.model.{CitationLabelDomain, CitationLabel}
@@ -17,9 +17,16 @@ object EvalGrobid {
     val outputFile = args(1)
     val docs = LoadGrobid.fromFilenameWithResults2(resultsFile)
     val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
-    evaluator.printEvaluation(docs, extra = "GROBID")
-    evaluator.segmentationEvaluation(docs, extra = "GROBID")
+    evaluator.printEvaluation(docs, extra = "GROBID (before fix)")
+    evaluator.segmentationEvaluation(docs, extra = "GROBID (before fix)")
     writeDecisions(docs, outputFile)
+    val fixes = docs.count(fixAuthorSegments)
+    println("")
+    println("evaluation after fixing author segments")
+    evaluator.printEvaluation(docs, extra = s"GROBID (fixed)")
+    evaluator.segmentationEvaluation(docs, extra = s"GROBID (fixed)")
+    println(s"\nfixed $fixes documents")
+    writeDecisions(docs, outputFile + ".fixed")
   }
 
   def writeDecisions(docs: Seq[Document], outfile: String): Unit = {
@@ -35,6 +42,44 @@ object EvalGrobid {
       pw.write("\n")
     }
     pw.close()
+  }
+
+  def fixAuthorSegments(doc: Document): Boolean = {
+    var fixed = false
+    val sb = new StringBuilder()
+    doc.tokens.foreach { token =>
+      val label = token.attr[CitationLabel]
+      sb.append(s"${label.target.categoryValue}\t${label.categoryValue}\t${token.string}\n")
+    }
+    val tokens: Seq[Token] = doc.tokens.toSeq
+    val tags = doc.tokens.map(_.attr[CitationLabel])
+    val authors = tags.zipWithIndex.filter { case (tag, idx) =>
+      val parts = tag.categoryValue.split("-")
+      val prefix = parts.head
+      val base = parts.last
+      prefix.equals("I") && base.equals("author")
+    }
+    if (authors.nonEmpty) {
+      val authorTokens: Seq[Token] = authors.map { case (tag, idx) => tokens(idx) }.toSeq
+      val lastTok: Token = authorTokens.sortBy { t => t.position }.last
+      if (lastTok.hasNext) {
+        val next = lastTok.next
+        if (next.string.equals(".")) {
+          fixed = true
+          next.attr[CitationLabel].set(CitationLabelDomain.index("I-author"))(null)
+        }
+      }
+    }
+//    if (fixed) {
+//      println("before:")
+//      println(sb.toString())
+//      println("after:")
+//      doc.tokens.foreach { token =>
+//        val label = token.attr[CitationLabel]
+//        println(s"${label.target.categoryValue}\t${label.categoryValue}\t${token.string}")
+//      }
+//    }
+    fixed
   }
 
 }

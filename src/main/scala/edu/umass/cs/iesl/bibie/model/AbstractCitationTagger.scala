@@ -55,9 +55,22 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
 
   def addFeatures(document: Document, training: Boolean): Unit
   def train(trainDocuments: Seq[Document], testDocuments: Seq[Document], params: Hyperparams)(implicit random: scala.util.Random): Double = {
-    trainDocuments.foreach(doc => addFeatures(doc, training = true))
-    println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
-    CitationFeaturesDomain.freeze()
+    if (params.trimBelow > 0) {
+      CitationFeaturesDomain.dimensionDomain.gatherCounts = true
+      trainDocuments.foreach(doc => addFeatures(doc, training = true))
+      println(s"feature domain size (before cutoff=${params.trimBelow}): ${CitationFeaturesDomain.dimensionDomain.size}")
+      CitationFeaturesDomain.dimensionDomain.trimBelowCount(params.trimBelow)
+      CitationFeaturesDomain.freeze()
+      println(s"feature domain size (after cutoff=${params.trimBelow}): ${CitationFeaturesDomain.dimensionDomain.size}")
+      CitationFeaturesDomain.dimensionDomain.gatherCounts = false
+      trainDocuments.foreach(doc => doc.tokens.foreach(t => t.attr.remove[CitationFeatures]))
+      trainDocuments.foreach(doc => addFeatures(doc, training = true))
+    } else {
+      trainDocuments.foreach(doc => addFeatures(doc, training = true))
+      CitationFeaturesDomain.freeze()
+      println(s"feature domain size: ${CitationFeaturesDomain.dimensionDomain.size}")
+    }
+
     testDocuments.foreach(doc => addFeatures(doc, training = false))
     // Get the variables to be inferred (for now, just operate on a subset)
     val trainLabels: Seq[CitationLabel] = trainDocuments.flatMap(_.tokens).map(_.attr[CitationLabel])
@@ -75,7 +88,7 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
       evaluator.segmentationEvaluation(trainDocuments, extra = s"TRAIN($iterCount)")
       evaluator.printEvaluation(testDocuments, extra = s"DEV($iterCount)")
       evaluator.segmentationEvaluation(testDocuments, extra = s"DEV($iterCount)")
-      println(top10weights(extra = s"$iterCount"))
+//      println(top10weights(extra = s"$iterCount"))
 
     }
     params.optimizer match {
@@ -92,14 +105,15 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
     (trainLabels ++ testLabels).foreach(_.setRandomly(random))
     trainDocuments.foreach(process)
     testDocuments.foreach(process)
-    println(top10weights(extra = "final"))
+    println(top10obsWeights(extra = "final (obs)"))
+//    println(top10markovWeights(extra = "final (markov)"))
     evaluator.segmentationEvaluation(trainDocuments, extra = "TRAIN")
     evaluator.printEvaluation(trainDocuments, extra = "TRAIN")
     evaluator.segmentationEvaluation(testDocuments, extra = "DEV")
     evaluator.printEvaluation(testDocuments, extra = "DEV")
   }
 
-  def top10weights(extra: String = ""): String = {
+  def top10obsWeights(extra: String = ""): String = {
     val sb = new StringBuilder
     sb.append(s"* * * weights ($extra) * * *\n")
     val nfeatures = model.obs.weights.value.dimensions.apply(0)
@@ -119,6 +133,27 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
     }
     sb.toString()
   }
+
+//  def top10markovWeights(extra: String = ""): String = {
+//    val sb = new StringBuilder
+//    sb.append(s"* * * weights ($extra) * * *\n")
+//    val nfeatures = model.markov.weights.value.dimensions.apply(0)
+//    val nclasses = model.markov.weights.value.dimensions.apply(1)
+//    for (i <- 0 to nclasses - 1) {
+//      val label = CitationLabelDomain.category(i)
+//      val m = new HashMap[String,Double]()
+//      for (j <- 0 to CitationFeaturesDomain.dimensionDomain.size - 1) {
+//        m.put(CitationFeaturesDomain.dimensionDomain.apply(j).toString(), model.markov.weights.value.apply(i, j))
+//      }
+//      val srt = m.toList.sortBy { case (featureName, weight) => weight }.reverse
+//      sb.append(s"* * top weights for class $label * *\n")
+//      for (j <- 0 to math.min(srt.length, 10)) {
+//        sb.append(s"\t${srt(j)._2}\t${srt(j)._1}\n")
+//      }
+//      sb.append("\n")
+//    }
+//    sb.toString()
+//  }
 
   def serialize(stream: OutputStream) {
     import cc.factorie.util.CubbieConversions._

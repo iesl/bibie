@@ -14,5 +14,6 @@ class Hyperparams(opts: BibieOptions) {
   val l1 = opts.l1.value
   val l2 = opts.l2.value
   val numIterations = opts.numIterations.value
+  val trimBelow = opts.trimBelow.value
   val verbose: Boolean = opts.verbose.value
 }

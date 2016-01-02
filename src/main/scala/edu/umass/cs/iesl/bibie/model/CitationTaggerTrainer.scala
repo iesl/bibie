@@ -4,10 +4,11 @@ package edu.umass.cs.iesl.bibie.model
  * Created by kate on 10/13/15.
  */
 
-import cc.factorie.app.nlp.Document
+import cc.factorie.app.nlp._
 import cc.factorie.util.HyperparameterMain
 
 import edu.umass.cs.iesl.bibie.BibieOptions
+import edu.umass.cs.iesl.bibie.evaluate.SegmentationEvaluation
 import edu.umass.cs.iesl.bibie.load._
 import edu.umass.cs.iesl.bibie.segment.OverSegmenter
 
@@ -31,14 +32,50 @@ object CitationTaggerTrainer extends HyperparameterMain {
     }
   }
 
+  def fixAuthorSegments(doc: Document): Boolean = {
+    var fixed = false
+    val sb = new StringBuilder()
+    doc.tokens.foreach { token =>
+      val label = token.attr[CitationLabel]
+      sb.append(s"${label.target.categoryValue}\t${label.categoryValue}\t${token.string}\n")
+    }
+    val tokens: Seq[Token] = doc.tokens.toSeq
+    val tags = doc.tokens.map(_.attr[CitationLabel])
+    val authors = tags.zipWithIndex.filter { case (tag, idx) =>
+      val parts = tag.categoryValue.split("-")
+      val prefix = parts.head
+      val base = parts.last
+      prefix.equals("I") && base.equals("author")
+    }
+    if (authors.nonEmpty) {
+      val authorTokens: Seq[Token] = authors.map { case (tag, idx) => tokens(idx) }.toSeq
+      val lastTok: Token = authorTokens.sortBy { t => t.position }.last
+      if (lastTok.hasNext) {
+        val next = lastTok.next
+        if (next.string.equals(".")) {
+          fixed = true
+          next.attr[CitationLabel].set(CitationLabelDomain.index("I-author"))(null)
+        }
+      }
+    }
+    if (fixed) {
+      println("before:")
+      println(sb.toString())
+      println("after:")
+      doc.tokens.foreach { token =>
+        val label = token.attr[CitationLabel]
+        println(s"${label.target.categoryValue}\t${label.categoryValue}\t${token.string}")
+      }
+    }
+    fixed
+  }
+
   def trainDefault(opts: BibieOptions): Double = {
     implicit val random = new scala.util.Random(0)
     val params = new Hyperparams(opts)
     val useGrobid = opts.useGrobid.value
     val trainDocs = if (useGrobid) LoadGrobid.fromFilename(opts.trainFile.value) else LoadHier.fromFile(opts.trainFile.value)
     val devDocs = if (useGrobid) LoadGrobid.fromFilename(opts.testFile.value) else LoadHier.fromFile(opts.devFile.value)
-//    val trainDocs = LoadHier.fromFile(opts.trainFile.value)
-//    val devDocs = LoadHier.fromFile(opts.devFile.value)
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
     val tagger = new DefaultCitationTagger(lexiconDir)
@@ -50,6 +87,16 @@ object CitationTaggerTrainer extends HyperparameterMain {
       logger.info(s"serializing model to ${opts.modelFile.value}")
       tagger.serialize(new FileOutputStream(opts.modelFile.value))
     }
+    if (opts.fixAuthorSegments.value) {
+      val fixes = devDocs.count(fixAuthorSegments)
+      println("")
+      println("evaluation after fixing author segments")
+      val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+      evaluator.printEvaluation(devDocs, extra = s"dev (fixed)")
+      evaluator.segmentationEvaluation(devDocs, extra = s"dev (fixed)")
+      println(s"\nfixed $fixes documents")
+    }
+    writeDecisions(devDocs, opts.outputFile.value + ".fixed")
     trainEval
   }
 
