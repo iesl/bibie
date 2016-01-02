@@ -8,6 +8,7 @@ from bibtexparser.bparser import BibTexParser
 from bibtexparser.customization import convert_to_unicode
 import string
 import re
+import json
 
 
 IGNORE_SET = set(['ENTRYTYPE',  #  e.g. 'article', 'inproceedings'
@@ -36,30 +37,42 @@ def process_file(filename, outdir, labels):
             if label not in labels:
                 continue
             lines.append((label, contents))
-    prefix = '%s/%s.proc' % (outdir, filename.split('/')[-1])
-    count = 0
-    for label, contents in lines:
-        outfname = '%s.%d' % (prefix, count)
-        count += 1
-        with codecs.open(outfname, 'w') as f:
-            try:
-                nlines = len(contents.split('\n'))
-                f.write('%s %d\n' % (label, nlines))
-                f.write('%s\n' % contents)
-            except Exception:
-                continue
 
-    # outf = codecs.open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w', errors='replace')
+    db_dict = {}
+    for label, contents in lines:
+        db_dict[label] = contents
+
+    outfilename = '%s/%s.json' % (outdir, filename.split('/')[-1])
+    with open(outfilename, 'w') as f:
+        json.dump(db_dict, f)
+
+
+
+
+    # prefix = '%s/%s.proc' % (outdir, filename.split('/')[-1])
+    # count = 0
     # for label, contents in lines:
-    #     if len(contents) > 0:
+    #     outfname = '%s.%d' % (prefix, count)
+    #     count += 1
+    #     with codecs.open(outfname, 'w') as f:
     #         try:
     #             nlines = len(contents.split('\n'))
-    #             outf.write('%s %d\n' % (label, nlines))
-    #             outf.write('%s\n' % contents)
-    #             outf.write('<END>\n\n')
+    #             f.write('%s %d\n' % (label, nlines))
+    #             f.write('%s\n' % contents)
     #         except Exception:
     #             continue
-    # outf.close()
+    #
+    # # outf = codecs.open('%s/%s.proc' % (outdir, filename.split('/')[-1]), 'w', errors='replace')
+    # # for label, contents in lines:
+    # #     if len(contents) > 0:
+    # #         try:
+    # #             nlines = len(contents.split('\n'))
+    # #             outf.write('%s %d\n' % (label, nlines))
+    # #             outf.write('%s\n' % contents)
+    # #             outf.write('<END>\n\n')
+    # #         except Exception:
+    # #             continue
+    # # outf.close()
 
 
 def get_filenames(indir, filelist_file):
@@ -70,6 +83,7 @@ def get_filenames(indir, filelist_file):
     filelist = set(filelist)
     files = ['%s/%s' % (indir, f) for f in os.listdir(indir) if f in filelist]
     return files
+
 
 def process_files(filenames, outdir, setid, labels):
     outdir = '%s/%s' % (outdir, setid)
@@ -94,8 +108,6 @@ def main(args):
     testfiles = get_filenames(indir, args.testlist)
     process_files(testfiles, outdir, 'test', labels)
 
-
-# /iesl/canvas/ksilvers/bibie-exec/bibie/clean_bibtex/dev/coccinelle.lip6.fr#coccinelle.bib.proc
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='preprocess bibtex files for document classifier')
