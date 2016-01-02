@@ -36,10 +36,12 @@ object LoadBibtex {
         if (value.length > 0) {
           val tmp = new Document(value)
           DeterministicTokenizer.process(tmp)
-          val tokens = tmp.tokens.map { t => new Token(doc, t.string) }
-          val span = new TokenSpan(tokens.toSeq)
-          val sent = new Sentence(doc.asSection, span.start, span.length)
-          sent.attr += new BibtexLabel(key, sent)
+          if (tmp.tokenCount > 0) {
+            val tokens = tmp.tokens.map { t => new Token(doc, t.string) }
+            val span = new TokenSpan(tokens.toSeq)
+            val sent = new Sentence(doc.asSection, span.start, span.length)
+            sent.attr += new BibtexLabel(key, sent)
+          }
         }
       }
     }
