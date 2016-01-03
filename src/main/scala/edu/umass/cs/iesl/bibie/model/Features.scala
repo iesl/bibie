@@ -118,21 +118,21 @@ class Features(val lexicons: Lexicons) {
     val pos = token.position.toDouble
     val len = token.sentence.length.toDouble
     val relpos = pos / len
-    if (relpos < 0.25) features += s"RELPOS_LT_P25"
+    if (relpos < 0.25) features += s"RELPOS_LT_P25"  // "relative position is less than 0.25"
     else if (relpos < 0.5) features += s"RELPOS_LT_P50"
     else if (relpos < 0.75) features += s"RELPOS_LT_P75"
     else features += s"RELPOS_LT_P100"
 
     if (word.matches(EndComma)) features += "ENDCOMMA"
     if (word.matches(EndPeriod)) features += "ENDPERIOD"
-    if (word.matches(EndComma) || word.matches(EndPeriod) || word.equals(".") || word.equals(",")) {
-      if (token.hasPrev && relpos <= 0.5) {
-        val prev = token.prev
-        val prevStr = prev.string
-        if (prevStr.matches(AuthorInitial)) features += "AuthorSegWithInitials"
-        if (prevStr.matches(AuthorName)) features += "AuthorSeg"
-      }
-    }
+//    if (word.matches(EndComma) || word.matches(EndPeriod) || word.equals(".") || word.equals(",")) {
+//      if (token.hasPrev && relpos <= 0.5) {
+//        val prev = token.prev
+//        val prevStr = prev.string
+//        if (prevStr.matches(AuthorInitial)) features += "AuthorSegWithInitials"
+//        if (prevStr.matches(AuthorName)) features += "AuthorSeg"
+//      }
+//    }
 
     /* added 30 dec 8:50 pm */
     if (spanStarts.contains(token.position)) features += "SegmentStart"
@@ -153,16 +153,10 @@ class Features(val lexicons: Lexicons) {
 
   def initSentenceFeatures(d: Document): Unit = {
     val docLength = d.tokens.size
-//    for (token <- d.tokens) {
-//      val per = token.position.toDouble / docLength.toDouble
-//      val binned = ((per * 60.0) / 5.0).floor
-//      token.attr[CitationFeatures] += "BIN=" + binned
-//    }
-
     for (t <- d.tokens) {
       if (t.nextWindow(10).count(_.string.toLowerCase.matches(".*(ed\\.|editor|eds|editors).*")) > 0) t.attr[CitationFeatures] += "POSSIBLEEDITOR"
+      if (t.nextWindow(10).count(_.string.toLowerCase.matches("[bB]y")) > 0) t.attr[CitationFeatures] += "NearBy"       /* added 3 Jan 1:13 PM */
     }
-
     for (s <- d.sentences) {
       for (token <- s.tokens) {
         for (lexicon <- lexicons(token)) {
@@ -173,32 +167,32 @@ class Features(val lexicons: Lexicons) {
     }
   }
 
-  def initSentenceFeatures(data: Seq[Document]): Unit = {
-    for (d <- data) {
-      val docLength = d.tokens.size
-      for (token <- d.tokens) {
-        val per = token.position.toDouble / docLength.toDouble
-        val binned = ((per * 60.0) / 5.0).floor
-        token.attr[CitationFeatures] += "BIN=" + binned
-      }
-    }
-
-    for (d <- data) {
-      for (t <- d.tokens) {
-        if (t.nextWindow(10).count(_.string.toLowerCase.matches(".*(ed\\.|editor|eds|editors).*")) > 0) t.attr[CitationFeatures] += "POSSIBLEEDITOR"
-      }
-    }
-
-    for (d <- data) {
-      for (s <- d.sentences) {
-        for (token <- s.tokens) {
-          for (lexicon <- lexicons(token)) {
-            token.attr[CitationFeatures] += "LEX=" + lexicon
-          }
-        }
-        cc.factorie.app.chain.Observations.addNeighboringFeatureConjunctions(s.tokens, (t: Token) => t.attr[CitationFeatures], "^[^@]*$", List(0, 0), List(1), List(2), List(-1), List(-2))
-      }
-    }
-  }
+//  def initSentenceFeatures(data: Seq[Document]): Unit = {
+//    for (d <- data) {
+//      val docLength = d.tokens.size
+//      for (token <- d.tokens) {
+//        val per = token.position.toDouble / docLength.toDouble
+//        val binned = ((per * 60.0) / 5.0).floor
+//        token.attr[CitationFeatures] += "BIN=" + binned
+//      }
+//    }
+//
+//    for (d <- data) {
+//      for (t <- d.tokens) {
+//        if (t.nextWindow(10).count(_.string.toLowerCase.matches(".*(ed\\.|editor|eds|editors).*")) > 0) t.attr[CitationFeatures] += "POSSIBLEEDITOR"
+//      }
+//    }
+//
+//    for (d <- data) {
+//      for (s <- d.sentences) {
+//        for (token <- s.tokens) {
+//          for (lexicon <- lexicons(token)) {
+//            token.attr[CitationFeatures] += "LEX=" + lexicon
+//          }
+//        }
+//        cc.factorie.app.chain.Observations.addNeighboringFeatureConjunctions(s.tokens, (t: Token) => t.attr[CitationFeatures], "^[^@]*$", List(0, 0), List(1), List(2), List(-1), List(-2))
+//      }
+//    }
+//  }
 
 }
