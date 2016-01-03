@@ -40,16 +40,19 @@ class DefaultCitationTagger(lexiconPath: String) extends AbstractCitationTagger 
    */
   val lexicons: DefaultLexicons = new DefaultLexicons(lexiconPath)
   val authorLexicons: Set[String] = Set("known_name.lst", "known_names.big.lst", "authors.lst", "names.lst")
-  case class LexiconList(hits: List[String])
+  var printCount = 0
+  case class LexiconList(hits: List[String]) {
+    val baseValues = hits.map(h => h.split("-").last)
+  }
 
   def addFeatures(doc: Document, training: Boolean = false): Unit = {
     def possibleAuthor(token: Token): Boolean = {
-      token.attr[LexiconList].hits.exists(hit => authorLexicons.contains(hit))
+      token.attr[LexiconList].baseValues.exists(hit => authorLexicons.contains(hit))
     }
     def addSentenceFeatures(sent: Sentence): Unit = {
       sent.tokens.foreach { token =>
         val features = new CitationFeatures(token)
-        val lexiconHits = token.attr[LexiconList].hits
+        val lexiconHits = token.attr[LexiconList].baseValues
         for (lexicon <- lexiconHits) features += s"LEX=$lexicon"
         token.attr += features
         featureBuilder.wordToFeatures(token)
@@ -79,6 +82,13 @@ class DefaultCitationTagger(lexiconPath: String) extends AbstractCitationTagger 
     // build list of lexicon hits beforehand
     doc.tokens.par.foreach { token =>
       token.attr += new LexiconList(lexicons(token))
+    }
+    if (printCount < 50) {
+      doc.tokens.foreach { token =>
+        val hits = token.attr[LexiconList].hits
+        println(s"${token.string}\t${hits.mkString(", ")}")
+      }
+      printCount += 1
     }
     if (training) {
       val sentenceIter = doc.sentences.toIterator

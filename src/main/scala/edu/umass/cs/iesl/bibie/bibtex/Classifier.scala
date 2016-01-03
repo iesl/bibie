@@ -25,6 +25,18 @@ class Classifier(lexiconPath: String) extends DocumentAnnotator {
   def process(doc: Document): Document = {
     doc
   }
+
+  def process1(classifier: LinearMulticlassClassifier, doc: Document): Unit = {
+    val sents = doc.sentences
+    val vars = sents.map(_.attr[BibtexLabel])
+    vars.foreach(_.setRandomly)
+    sents.foreach(sent => if (!sent.attr.contains[BibtexFeatureVar]) addFeatures(sent))
+    sents.foreach { sent =>
+      val label = sent.attr[BibtexLabel]
+      val features = sent.attr[BibtexFeatureVar]
+      label := classifier.classification(features.value).bestLabelIndex
+    }
+  }
   override def prereqAttrs: Iterable[Class[_]] = Seq(classOf[Token])
   override def postAttrs: Iterable[Class[_]] = Seq(classOf[BibtexLabel])
   override def tokenAnnotationString(token: Token): String = s"${token.attr[BibtexLabel].categoryValue}"
@@ -47,35 +59,40 @@ class Classifier(lexiconPath: String) extends DocumentAnnotator {
     }
     println(top10weights(classifier, extra = "final"))
     println("")
-    val trainEval = new LabeledDiscreteEvaluation[BibtexLabel](trainLabels)
-    println("train evaluation")
-    println(trainEval)
-    println(trainEval.overallEvalString)
-    println(s"f1: ${trainEval.f1}")
+    trainDocuments.foreach(d => process1(classifier, d))
+    testDocuments.foreach(d => process1(classifier, d))
+    evaluate(classifier, trainDocuments, extra = "TRAIN")
     println("")
-    val eval = new LabeledDiscreteEvaluation[BibtexLabel](testLabels)
-    println("test evaluation")
-    println(eval)
-    println(eval.overallEvalString)
-    println(s"f1: ${eval.f1}")
+    evaluate(classifier, testDocuments, extra = "DEV")
+
     classifier
   }
 
   def evaluate(classifier: LinearMulticlassClassifier, docs: Seq[Document], extra: String = ""): Unit = {
-    val sents = docs.flatMap(_.sentences)
-    val vars = sents.map(_.attr[BibtexLabel])
-    vars.foreach(_.setRandomly)
-    sents.foreach(sent => addFeatures(sent))
-    sents.foreach { sent =>
-      val label = sent.attr[BibtexLabel]
-      val features = sent.attr[BibtexFeatureVar]
-      label := classifier.classification(features.value).bestLabelIndex
+    def macroAvg(eval: LabeledDiscreteEvaluation[BibtexLabel]): String = {
+      val labelIdxes = BibtexDomain.categories.map(c => BibtexDomain.index(c))
+      val n = labelIdxes.length.toDouble
+      val recall = 1.0 * labelIdxes.map(i => eval.recall(i)).sum / n
+      val prec = 1.0 * labelIdxes.map(i => eval.precision(i)).sum / n
+      val f1 = 2.0 * prec * recall / (prec + recall)
+      "OVERALL (macro) f1=%-8f p=%-8f r=%-8f".format(f1, prec, recall)
     }
+    def microAvg(eval: LabeledDiscreteEvaluation[BibtexLabel]): String = {
+      val labelIdxes = BibtexDomain.categories.map(c => BibtexDomain.index(c))
+      val tp = labelIdxes.map(i => eval.tp(i)).sum
+      val fp = labelIdxes.map(i => eval.fp(i)).sum
+      val fn = labelIdxes.map(i => eval.fp(i)).sum
+      val recall = 1.0 * tp / (tp + fn)
+      val prec = 1.0 * tp / (tp + fp)
+      val f1 = 2.0 * prec * recall / (prec + recall)
+      "OVERALL (micro) f1=%-8f p=%-8f r=%-8f".format(f1, prec, recall)
+    }
+    val vars = docs.flatMap(_.sentences).map(_.attr[BibtexLabel])
     println(s"$extra evaluation")
     val eval = new LabeledDiscreteEvaluation[BibtexLabel](vars)
     println(eval)
-    println(eval.overallEvalString)
-    println(s"f1: ${eval.f1}")
+    println(macroAvg(eval))
+    println(microAvg(eval))
   }
 
   def top10weights(model: LinearMulticlassClassifier, extra: String = ""): String = {
@@ -244,21 +261,24 @@ object Trainer {
     val opts = new BibieOptions
     opts.parse(args)
     println(opts.unParse.mkString("\n"))
-    val devDocs = LoadBibtex.fromDir(opts.devDir.value)
-    devDocs.take(5).foreach { doc =>
-      val sents = doc.sentences
-      sents.foreach { sent =>
-        println(sent.attr[BibtexLabel].target.categoryValue)
-        println(sent.tokens.map(_.string).mkString(" "))
-      }
-      println("")
-    }
+
+//    devDocs.take(5).foreach { doc =>
+//      val sents = doc.sentences
+//      sents.foreach { sent =>
+//        println(sent.attr[BibtexLabel].target.categoryValue)
+//        println(sent.tokens.map(_.string).mkString(" "))
+//      }
+//      println("")
+//    }
     val trainDocs = LoadBibtex.fromDir(opts.trainDir.value)
+    val devDocs = LoadBibtex.fromDir(opts.devDir.value)
+    BibtexDomain.freeze()
     val lexdir = opts.lexiconUrl.value
     val tagger = new Classifier(lexdir)
     val params = new Hyperparams(opts)
     val model = tagger.train(trainDocs, devDocs, params)
     val testDocs = LoadBibtex.fromDir(opts.testDir.value)
-    tagger.evaluate(model, testDocs, extra = "test")
+    testDocs.foreach(d => tagger.process1(model, d))
+    tagger.evaluate(model, testDocs, extra = "TEST")
   }
 }
