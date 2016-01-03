@@ -131,7 +131,7 @@ def process_files(args):
                             continue
                         char_ints.append(vocab[char])
                     if len(char_ints) > 0:
-                        line = '%d\t%s' % (label_int, ' '.join([str(i) for i in char_ints]))
+                        line = '%s\t%d\t%s' % (f, label_int, ' '.join([str(i) for i in char_ints]))
                         lines.append(line)
         if len(lines) > 0:
             with open(outfile, 'w') as outf:
