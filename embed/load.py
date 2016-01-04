@@ -30,10 +30,14 @@ def process(lines):
     X, Y = [], []
     for line in lines:
         parts = line.strip().split('\t')
-        if len(parts) != 2:
+        x, y = None, None
+        if len(parts) == 2:
+            y, x = parts[0], parts[1]
+        elif len(parts) == 3:
+            y, x = parts[1], parts[2]
+        else:
             nerrs += 1
             continue
-        y, x = parts[0], parts[1]
         if len(x) == 0:
             nerrs += 1
             continue

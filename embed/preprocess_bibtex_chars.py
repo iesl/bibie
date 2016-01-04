@@ -107,7 +107,8 @@ def process_files(args):
     vocab = cPickle.load(open('%s/vocab.pkl' % outdir, 'r'))
     labels = cPickle.load(open('%s/labels.pkl' % outdir, 'r'))
     parser = BibTexParser()
-    parser.customization = convert_to_unicode
+    if args.utf8:
+        parser.customization = convert_to_unicode
     for i, f in enumerate(fnames):
         outfile = '%s/%s' % (outdir, f.split('/')[-1])
         lines = []
