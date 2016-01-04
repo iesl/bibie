@@ -261,17 +261,10 @@ object Trainer {
     val opts = new BibieOptions
     opts.parse(args)
     println(opts.unParse.mkString("\n"))
-
-//    devDocs.take(5).foreach { doc =>
-//      val sents = doc.sentences
-//      sents.foreach { sent =>
-//        println(sent.attr[BibtexLabel].target.categoryValue)
-//        println(sent.tokens.map(_.string).mkString(" "))
-//      }
-//      println("")
-//    }
     val trainDocs = LoadBibtex.fromDir(opts.trainDir.value)
     val devDocs = LoadBibtex.fromDir(opts.devDir.value)
+    println(s"TRAIN: ${trainDocs.length} files with ${trainDocs.map(_.sentenceCount).sum} sentences total")
+    println(s"DEV: ${devDocs.length} files with ${devDocs.map(_.sentenceCount).sum} sentences total")
     BibtexDomain.freeze()
     val lexdir = opts.lexiconUrl.value
     val tagger = new Classifier(lexdir)
@@ -280,5 +273,9 @@ object Trainer {
     val testDocs = LoadBibtex.fromDir(opts.testDir.value)
     testDocs.foreach(d => tagger.process1(model, d))
     tagger.evaluate(model, testDocs, extra = "TEST")
+    println("")
+    println(s"TRAIN: ${trainDocs.length} files with ${trainDocs.map(_.sentenceCount).sum} sentences total")
+    println(s"DEV: ${devDocs.length} files with ${devDocs.map(_.sentenceCount).sum} sentences total")
+    println(s"TEST: ${testDocs.length} files with ${testDocs.map(_.sentenceCount).sum} sentences total")
   }
 }

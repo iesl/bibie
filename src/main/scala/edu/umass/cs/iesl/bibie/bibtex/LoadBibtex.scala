@@ -16,15 +16,35 @@ object LoadBibtex {
   def main(args: Array[String]): Unit = {
     val dir = args(0)
     val docs = fromDir(dir)
-    println(docs.length)
-    docs.take(10).foreach { doc =>
-      println(s"doc: sents=${doc.sentenceCount}, toks=${doc.tokenCount}")
-      doc.sentences.foreach { s =>
-        println(s"\t${s.attr[BibtexLabel].target.categoryValue}")
-        println(s"\t${s.tokens.map(_.string).mkString(" ")}")
+    val labels = BibtexDomain.categories
+    for (l <- labels) {
+      var n = 0
+      var per = 0
+      var nper = 0
+      for (d <- docs; s <- d.sentences) {
+        val tag = s.attr[BibtexLabel]
+        if (tag.target.categoryValue.equals(l)) {
+          n += 1
+          val lastTok = s.tokens.last
+          if (lastTok.string.equals(".")) per += 1
+          else nper += 1
+        }
       }
+      println(l)
+      println(n)
+      println(s"per: ${per/n.toDouble}")
+      println(s"not per: ${nper/n.toDouble}")
       println("")
     }
+//    println(docs.length)
+//    docs.take(10).foreach { doc =>
+//      println(s"doc: sents=${doc.sentenceCount}, toks=${doc.tokenCount}")
+//      doc.sentences.foreach { s =>
+//        println(s"\t${s.attr[BibtexLabel].target.categoryValue}")
+//        println(s"\t${s.tokens.map(_.string).mkString(" ")}")
+//      }
+//      println("")
+//    }
   }
 
   def fromFilename(filename: String): Document = {

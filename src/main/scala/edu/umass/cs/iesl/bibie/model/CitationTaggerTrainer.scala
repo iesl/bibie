@@ -62,6 +62,13 @@ object CitationTaggerTrainer extends HyperparameterMain {
   }
 
   def trainDefault(opts: BibieOptions): Double = {
+    def doBench(docs: Seq[Document], tagger: DefaultCitationTagger, lexiconDir: String): Double = {
+      val start = System.currentTimeMillis()
+      OverSegmenter.overSegment(docs, lexiconDir)
+      docs.par.foreach(tagger.process)
+      val total = System.currentTimeMillis() - start
+      total
+    }
     implicit val random = new scala.util.Random(0)
     val params = new Hyperparams(opts)
     val useGrobid = opts.useGrobid.value
@@ -88,6 +95,27 @@ object CitationTaggerTrainer extends HyperparameterMain {
       println(s"\nfixed $fixes documents")
       writeDecisions(devDocs, opts.outputFile.value + ".fixed")
     }
+
+    if (!useGrobid) {
+      val testDocs = LoadHier.fromFile(opts.testFile.value)
+      val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+      evaluator.printEvaluation(devDocs, extra = s"TEST")
+      evaluator.segmentationEvaluation(devDocs, extra = s"TEST")
+    }
+
+    var tot = 0.0
+    for (i <- 0 to 10) {
+      val devDocsFresh = if (useGrobid) LoadGrobid.fromFilename(opts.testFile.value) else LoadHier.fromFile(opts.devFile.value)
+      val total = doBench(devDocsFresh, tagger, lexiconDir)
+      tot += total
+    }
+
+    val n = devDocs.length.toDouble
+    val totSecs = tot / 1000.0
+    val secsPerDoc = totSecs/n
+    println(s"bench: $secsPerDoc secs/doc (avg)")
+
+
     trainEval
   }
 
