@@ -27,10 +27,9 @@ factorieJar=""           # /path/to/factorie/target/factorie_-nlp-jar-with-depen
 bibieJar=""              #/path/to/bibie-1.0-SNAPSHOT.jar
 CP="$factorieJar:$bibieJar"
 
-java -Xmx$mem -cp $CP edu.umass.cs.iesl.paperheader.HeaderTaggerRunner \
+java -Xmx$mem -cp $CP edu.umass.cs.iesl.bibie.CitationTaggerRunner \
 --test-file=$testFile \
 --tagger-type=$taggerType \
 --data-type=$dataType \
 --model-file=$modelFile \
 --lexicons=$lexicons
-

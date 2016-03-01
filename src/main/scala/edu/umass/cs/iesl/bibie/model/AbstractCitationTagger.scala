@@ -92,6 +92,12 @@ abstract class AbstractCitationTagger extends DocumentAnnotator {
     evaluator.printEvaluation(testDocuments, extra = "DEV")
   }
 
+  def evaluation(docs: Seq[Document]): Unit = {
+    val evaluator = new SegmentationEvaluation[CitationLabel](CitationLabelDomain)
+    evaluator.printEvaluation(docs)
+    evaluator.segmentationEvaluation(docs)
+  }
+
   def serialize(stream: OutputStream) {
     import cc.factorie.util.CubbieConversions._
     val is = new DataOutputStream(new BufferedOutputStream(stream))

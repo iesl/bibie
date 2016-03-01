@@ -25,18 +25,28 @@ package object bibie {
     val trainFile = new CmdOption("train-file", "", "STRING", "UMass formatted training file.")
     val devFile = new CmdOption("dev-file", "", "STRING", "UMass formatted dev file.")
     val testFile = new CmdOption("test-file", "", "STRING", "UMass formatted test file.")
-    val rootPath = new CmdOption[String]("root-path", "", "STRING", "path to directory where you want to save things")
+    val taggerType = new CmdOption[String]("tagger-type", "default", "STRING", "tagger type: grobid|default|combined")
+
+    /*
+     * If dataType is set to "iesl", the tagger will expect a tab-separated filed that looks like what is included in
+     *    paper-header/data/fullpaper-headers.tsv
+     * with five columns: [IOB label] [token] [x-coord] [y-coord] [font size]
+     * Otherwise, if dataType is set to "grobid", the tagger will expect a tab-separated file that looks like
+     *    paper-header/data/grobid-headers-train.tsv
+     * (see edu.umass.cs.iesl.load.Grobid for details)
+     */
+    val dataType = new CmdOption[String]("data-type", "iesl", "STRING", "dataset id: iesl|grobid")
+
     val saveModel = new CmdOption[Boolean]("save-model", true, "BOOLEAN", "whether or not to save the model")
     val modelFile = new CmdOption[String]("model-file", "bibie.factorie", "STRING", "file to save model to or load model from")
     val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "path to lexicon files")
+//    val rootPath = new CmdOption[String]("root-path", "", "STRING", "path to directory where you want to save things")
 
-    val taggerType = new CmdOption[String]("tagger-type", "default", "STRING", "tagger type: grobid|default|combined")
+    /*
 
-    /* experiment id */
-//    val dataSet = new CmdOption[String]("data-set", "", "STRING", "which data set to use: grobid|umass-citation")
-//    val featureSet = new CmdOption[String]("feature-set", "", "STRING", "which feature set to use: grobid|umass|both (note: if dataSet==umass-citation, umass features will be used)")
+    Training hyperparameters
 
-    /* training hyperparameters */
+    */
     val useCrossValidation = new CmdOption[Boolean]("use-cross-validation", false, "BOOLEAN", "use cross validation")
     val nFolds = new CmdOption[Int]("n-folds", 5, "INT", "# folds to use in cross validation")
     val optimizer = new CmdOption[String]("optimizer", "lbfgs", "STRING", "lbfgs|adagrad")

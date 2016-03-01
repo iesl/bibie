@@ -4,6 +4,7 @@ package edu.umass.cs.iesl.bibie.model
  * Created by kate on 10/13/15.
  */
 
+import cc.factorie.app.nlp.Document
 import cc.factorie.util.HyperparameterMain
 
 import edu.umass.cs.iesl.bibie.BibieOptions
@@ -31,8 +32,8 @@ object CitationTaggerTrainer extends HyperparameterMain {
   def trainDefault(opts: BibieOptions): Double = {
     implicit val random = new scala.util.Random(0)
     val params = new Hyperparams(opts)
-    val trainDocs = LoadHier.fromFile(opts.trainFile.value)
-    val devDocs = LoadHier.fromFile(opts.devFile.value)
+    val trainDocs = loadDocs(opts.trainFile.value, opts.dataType.value)
+    val devDocs = if (opts.devFile.wasInvoked) loadDocs(opts.devFile.value, opts.dataType.value) else Seq()
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
     val tagger = new DefaultCitationTagger(lexiconDir)
@@ -49,8 +50,8 @@ object CitationTaggerTrainer extends HyperparameterMain {
     implicit val random = new scala.util.Random(0)
     val params = new Hyperparams(opts)
     val tagger = new GrobidCitationTagger
-    val trainDocs = LoadGrobid.fromFilename(opts.trainFile.value)
-    val devDocs = LoadGrobid.fromFilename(opts.devFile.value)
+    val trainDocs = loadDocs(opts.trainFile.value, opts.dataType.value)
+    val devDocs = if (opts.devFile.wasInvoked) loadDocs(opts.devFile.value, opts.dataType.value) else Seq()
     val trainEval = tagger.train(trainDocs, devDocs, params)
     logger.info(s"train eval: $trainEval")
     if (opts.saveModel.value) {
@@ -63,8 +64,8 @@ object CitationTaggerTrainer extends HyperparameterMain {
   def trainCombined(opts: BibieOptions): Double = {
     implicit val random = new scala.util.Random(0)
     val params = new Hyperparams(opts)
-    val trainDocs = LoadGrobid.fromFilename(opts.trainFile.value)
-    val devDocs = LoadGrobid.fromFilename(opts.devFile.value)
+    val trainDocs = loadDocs(opts.trainFile.value, opts.dataType.value)
+    val devDocs = if (opts.devFile.wasInvoked) loadDocs(opts.devFile.value, opts.dataType.value) else Seq()
     val lexiconDir = opts.lexiconUrl.value
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
     val tagger = new CombinedCitationTagger(lexiconDir)
@@ -75,6 +76,19 @@ object CitationTaggerTrainer extends HyperparameterMain {
       tagger.serialize(new FileOutputStream(opts.modelFile.value))
     }
     trainEval
+  }
+
+  /*
+
+  Helpers
+
+   */
+  def loadDocs(filename: String, dataType: String, n: Int = -1): Seq[Document] = {
+    dataType match {
+      case "grobid" => LoadGrobid.fromFilename(filename)
+      case "iesl" => LoadHier.fromFile(filename)
+      case _ => throw new Exception(s"invalid data type: $dataType")
+    }
   }
 
 }
