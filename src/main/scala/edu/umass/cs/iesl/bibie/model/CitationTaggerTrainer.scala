@@ -14,6 +14,8 @@ import edu.umass.cs.iesl.bibie.segment.OverSegmenter
 
 object CitationTaggerTrainer extends HyperparameterMain {
 
+  implicit val random = new scala.util.Random(0)
+
   def evaluateParameters(args: Array[String]): Double = {
     val opts = new BibieOptions
     opts.parse(args)
@@ -26,7 +28,6 @@ object CitationTaggerTrainer extends HyperparameterMain {
   }
 
   def trainDefault(opts: BibieOptions): Double = {
-    implicit val random = new scala.util.Random(0)
     val logOpt = getLogOpt(opts.logFile.value)
     val lexiconDir = opts.lexiconUrl.value
     val (trainDocs, devDocs) = loadData(opts)
@@ -43,7 +44,6 @@ object CitationTaggerTrainer extends HyperparameterMain {
   }
 
   def trainGrobid(opts: BibieOptions): Double = {
-    implicit val random = new scala.util.Random(0)
     val logOpt = getLogOpt(opts.logFile.value)
     val (trainDocs, devDocs) = loadData(opts)
     val tagger = new GrobidCitationTagger(logOpt)
@@ -58,7 +58,6 @@ object CitationTaggerTrainer extends HyperparameterMain {
   }
 
   def trainCombined(opts: BibieOptions): Double = {
-    implicit val random = new scala.util.Random(0)
     val logOpt = getLogOpt(opts.logFile.value)
     val lexiconDir = opts.lexiconUrl.value
     val (trainDocs, devDocs) = loadData(opts)
