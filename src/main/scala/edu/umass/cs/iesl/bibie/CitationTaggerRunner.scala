@@ -37,7 +37,7 @@ object CitationTaggerRunner {
     val labels = docs.flatMap(_.tokens).map(_.attr[CitationLabel]).toIndexedSeq
     OverSegmenter.overSegment(docs, lexiconDir)
     docs.foreach(tagger.process)
-    tagger.evaluation(labels, opts.segmentScheme.value)
+    println(tagger.evaluation(labels, opts.segmentScheme.value))
   }
 
 }
