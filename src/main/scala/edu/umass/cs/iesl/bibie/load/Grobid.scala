@@ -4,10 +4,8 @@ package edu.umass.cs.iesl.bibie.load
  * Created by kate on 5/13/15.
  */
 
-import edu.umass.cs.iesl.bibie.model.{CitationLabelDomain, CitationLabel, CitationFeatures}
-import edu.umass.cs.iesl.bibie.segment._
-
 import cc.factorie.app.nlp._
+import edu.umass.cs.iesl.bibie.model.{CitationLabel, CitationLabelDomain}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
@@ -160,69 +158,6 @@ object LoadGrobid {
     buff
   }
 
-  def fromFilenameLabeled(filename: String): Seq[Document] = {
-    val whitespace = "\\s+".r
-    val buff = new ArrayBuffer[Document]()
-    var currDoc = new Document("")
-    var currSent = new Sentence(currDoc)
-    val lines = Source.fromFile(filename).getLines()
-    var tokenCount = 0
-    var docCount = 0
-
-    assert(lines.nonEmpty, s"no lines loaded from $filename")
-
-    val okayLines = new ArrayBuffer[String]()
-    try {
-      while (lines.hasNext) okayLines += lines.next()
-    } catch {
-      case e: Exception => println(e)
-    }
-
-    for (line <- okayLines) {
-      //      val line = lines.next()
-      val parts = whitespace.split(line)
-      if (parts.length > 1) {
-        val guessLabel = {
-          val l = parts.last.dropRight(1)
-          if (l.startsWith("I-<")) {
-            val ll = l.drop(3)
-            "B-" + ll
-          } else {
-            val ll = l.drop(1)
-            "I-" + ll
-          }
-        }
-        val trueLabel = {
-          val l = parts.dropRight(1).last.dropRight(1)
-          if (l.startsWith("I-<")) {
-            val ll = l.drop(3)
-            "B-" + ll
-          } else {
-            val ll = l.drop(1)
-            "I-" + ll
-          }
-        }
-        val string = parts.head
-        val features = parts.dropRight(1)
-        val token = new Token(currSent, string)
-        token.attr += new CitationFeatures(token)
-        token.attr[CitationFeatures] ++= features
-        token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(guessLabel)) guessLabel else "O", token)
-        token.attr += new GoldCitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(trueLabel)) trueLabel else "O", token)
-        tokenCount += 1
-      } else {
-        if (currSent.length > 0) currDoc.appendString("")
-        if (currDoc.tokenCount > 0) {
-          buff += currDoc
-          currDoc = new Document("")
-          currSent = new Sentence(currDoc)
-          docCount += 1
-        }
-      }
-    }
-    println(s"Loaded $docCount docs with $tokenCount tokens from file $filename.")
-    buff
-  }
 }
 
 

@@ -4,19 +4,15 @@ package edu.umass.cs.iesl.bibie.model
  * Created by kate on 10/13/15.
  */
 
+import java.io._
+
 import cc.factorie.app.nlp.Document
 import cc.factorie.util.HyperparameterMain
-
 import edu.umass.cs.iesl.bibie.BibieOptions
 import edu.umass.cs.iesl.bibie.load._
 import edu.umass.cs.iesl.bibie.segment.OverSegmenter
 
-import java.util.logging.Logger
-import java.io._
-
 object CitationTaggerTrainer extends HyperparameterMain {
-
-  private val logger = Logger.getLogger(getClass.getName)
 
   def evaluateParameters(args: Array[String]): Double = {
     val opts = new BibieOptions
@@ -31,15 +27,16 @@ object CitationTaggerTrainer extends HyperparameterMain {
 
   def trainDefault(opts: BibieOptions): Double = {
     implicit val random = new scala.util.Random(0)
-    val params = new Hyperparams(opts)
-    val (trainDocs, devDocs) = loadData(opts)
+    val logOpt = getLogOpt(opts.logFile.value)
     val lexiconDir = opts.lexiconUrl.value
+    val (trainDocs, devDocs) = loadData(opts)
+    val tagger = new DefaultCitationTagger(logOpt, lexiconDir)
+    val params = new Hyperparams(opts)
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
-    val tagger = new DefaultCitationTagger(lexiconDir)
     val trainEval = tagger.train(trainDocs, devDocs, params)
-    logger.info(s"train eval: $trainEval")
+    tagger.log.info(s"train eval: $trainEval")
     if (opts.saveModel.value) {
-      logger.info(s"serializing model to ${opts.modelFile.value}")
+      tagger.log.info(s"serializing model to ${opts.modelFile.value}")
       tagger.serialize(new FileOutputStream(opts.modelFile.value))
     }
     trainEval
@@ -47,13 +44,14 @@ object CitationTaggerTrainer extends HyperparameterMain {
 
   def trainGrobid(opts: BibieOptions): Double = {
     implicit val random = new scala.util.Random(0)
-    val params = new Hyperparams(opts)
-    val tagger = new GrobidCitationTagger
+    val logOpt = getLogOpt(opts.logFile.value)
     val (trainDocs, devDocs) = loadData(opts)
+    val tagger = new GrobidCitationTagger(logOpt)
+    val params = new Hyperparams(opts)
     val trainEval = tagger.train(trainDocs, devDocs, params)
-    logger.info(s"train eval: $trainEval")
+    tagger.log.info(s"train eval: $trainEval")
     if (opts.saveModel.value) {
-      logger.info(s"serializing model to ${opts.modelFile.value}")
+      tagger.log.info(s"serializing model to ${opts.modelFile.value}")
       tagger.serialize(new FileOutputStream(opts.modelFile.value))
     }
     trainEval
@@ -61,15 +59,16 @@ object CitationTaggerTrainer extends HyperparameterMain {
 
   def trainCombined(opts: BibieOptions): Double = {
     implicit val random = new scala.util.Random(0)
-    val params = new Hyperparams(opts)
-    val (trainDocs, devDocs) = loadData(opts)
+    val logOpt = getLogOpt(opts.logFile.value)
     val lexiconDir = opts.lexiconUrl.value
+    val (trainDocs, devDocs) = loadData(opts)
+    val tagger = new CombinedCitationTagger(logOpt, lexiconDir)
+    val params = new Hyperparams(opts)
     OverSegmenter.overSegment(trainDocs ++ devDocs, lexiconDir)
-    val tagger = new CombinedCitationTagger(lexiconDir)
     val trainEval = tagger.train(trainDocs, devDocs, params)
-    logger.info(s"train eval: $trainEval")
+    tagger.log.info(s"train eval: $trainEval")
     if (opts.saveModel.value) {
-      logger.info(s"serializing model to ${opts.modelFile.value}")
+      tagger.log.info(s"serializing model to ${opts.modelFile.value}")
       tagger.serialize(new FileOutputStream(opts.modelFile.value))
     }
     trainEval
@@ -105,6 +104,11 @@ object CitationTaggerTrainer extends HyperparameterMain {
     val train = docs.take(ntrain)
     val dev = docs.drop(ntrain)
     (train, dev)
+  }
+
+  def getLogOpt(logFilename: String): Option[String] = logFilename match {
+      case "" => None
+      case _ => Some(logFilename)
   }
 
 }
