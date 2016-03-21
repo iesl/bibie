@@ -39,7 +39,9 @@ oka oka o ok oka oka a ka oka oka LINEIN NOCAPS NODIGIT 0 1 0 0 0 0 0 0 0 0 0 0 
  */
 
 object LoadGrobid {
-  
+
+  val DEFAULT_LABEL = "I-other"
+
   def fromFilename(filename: String, withFeatures: Boolean = true): Seq[Document] = {
     println(s"Loading data from $filename ...")
     val whitespace = "\\s+".r
@@ -67,7 +69,7 @@ object LoadGrobid {
         val features = parts.dropRight(1).zipWithIndex.map{case(f, i) => "G@" + i + "=" + f}
         val token = new Token(currSent, string)
         if (withFeatures) token.attr += new PreFeatures(features, token) //put in PreFeatures so we can freeze CitationFeaturesDomain after loading training / before loading dev
-        token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(label)) label else "O", token)
+        token.attr += new CitationLabel(if (!CitationLabelDomain.frozen || CitationLabelDomain.categories.contains(label)) label else DEFAULT_LABEL, token)
         tokenCount += 1
       } else {
         if (currSent.length > 0) currDoc.appendString("")
