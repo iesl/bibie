@@ -98,11 +98,12 @@ object CitationTaggerTrainer extends HyperparameterMain {
     }
   }
 
-  def splitData(docs: Seq[Document], trainPortion: Double = 0.8): (Seq[Document], Seq[Document]) = {
+  def splitData(docs: Seq[Document], trainPortion: Double = 0.8)(implicit random: scala.util.Random): (Seq[Document], Seq[Document]) = {
+    val shuff = random.shuffle(docs)
     val n = docs.length
     val ntrain = math.floor(trainPortion * n).toInt
-    val train = docs.take(ntrain)
-    val dev = docs.drop(ntrain)
+    val train = shuff.take(ntrain)
+    val dev = shuff.drop(ntrain)
     (train, dev)
   }
 
