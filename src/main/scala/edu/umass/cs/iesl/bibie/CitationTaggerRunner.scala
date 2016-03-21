@@ -16,9 +16,9 @@ object CitationTaggerRunner {
     val logOpt = CitationTaggerTrainer.getLogOpt(opts.logFile.value)
     val lexiconDir = opts.lexiconUrl.value
     val tagger = opts.taggerType.value match {
-      case "grobid" => new GrobidCitationTagger(logOpt)
-      case "combined" => new CombinedCitationTagger(logOpt, lexiconDir)
-      case "default" => new DefaultCitationTagger(logOpt, lexiconDir)
+      case "grobid" => new GrobidCitationTagger(logOpt, opts.modelFile.value)
+      case "combined" => new CombinedCitationTagger(logOpt, lexiconDir, opts.modelFile.value)
+      case _ => new DefaultCitationTagger(logOpt, lexiconDir, opts.modelFile.value)
     }
 
     tagger.log.info(s"label domain size: ${CitationLabelDomain.size}")

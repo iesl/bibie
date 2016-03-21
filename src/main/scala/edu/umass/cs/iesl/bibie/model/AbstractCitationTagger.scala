@@ -93,7 +93,7 @@ abstract class AbstractCitationTagger(logFilename: Option[String]) extends Docum
     val infoStr =
       s"""
          |train set: ${trainDocuments.length} docs with ${trainDocuments.map(_.tokenCount).sum} tokens\n
-                                                                                                 |dev set: ${devDocuments.length} docs with ${devDocuments.map(_.tokenCount).sum} tokens
+         |dev set: ${devDocuments.length} docs with ${devDocuments.map(_.tokenCount).sum} tokens
        """.stripMargin
     log.info(infoStr)
 

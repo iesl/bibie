@@ -1,7 +1,7 @@
 package edu.umass.cs.iesl.bibie.model
 
+import java.io.File
 import java.net.URL
-import java.util.logging.Logger
 
 import cc.factorie.app.chain.Observations._
 import cc.factorie.app.nlp.{Document, Token}
@@ -13,23 +13,13 @@ import edu.umass.cs.iesl.bibie.util.DefaultLexicons
  */
 class CombinedCitationTagger(logFilename: Option[String], lexiconPath: String) extends AbstractCitationTagger(logFilename) {
 
-  private val logger = Logger.getLogger(getClass.getName)
-
-  /* Deserialize this tagger from the model at the given URL */
-  def this(logFilename: Option[String], lexiconPath: String, url:java.net.URL) = {
+  def this(logFilename: Option[String], lexiconPath: String, url: URL) = {
     this(logFilename, lexiconPath)
-    if (url != null) {
-      deserialize(url.openConnection.getInputStream)
-      logger.info(s"loaded model from ${url.getPath}")
-    } else {
-      logger.info(s"model not found at ${url.getPath}")
-    }
+    deserialize(url.openConnection().getInputStream)
+    log.info(s"deserialized model from ${url.getPath}")
   }
 
-  /* Deserialize this tagger from the model at the given path on disk */
-  def this(logFilename: Option[String], lexiconPath: String, modelPath: String) = {
-    this(logFilename, lexiconPath, new URL("file://" + modelPath))
-  }
+  def this(logFilename: Option[String], lexiconPath: String, path: String) = this(logFilename, lexiconPath, new File(path).toURL)
 
   val lexicons: DefaultLexicons = new DefaultLexicons(lexiconPath)
 
