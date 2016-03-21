@@ -9,9 +9,11 @@ import edu.umass.cs.iesl.bibie._
 class Hyperparams(opts: BibieOptions) {
   val lexiconUrl = opts.lexiconUrl.value
   val optimizer = opts.optimizer.value
-  val rate = opts.rate.value
+  val learningRate = opts.rate.value
   val delta = opts.delta.value
   val l1 = opts.l1.value
   val l2 = opts.l2.value
   val numIterations = opts.numIterations.value
+  val trimBelow: Int = opts.trimBelow.value
+  val segmentScheme: String = opts.segmentScheme.value
 }

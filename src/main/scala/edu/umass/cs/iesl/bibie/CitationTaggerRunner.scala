@@ -25,12 +25,24 @@ object CitationTaggerRunner {
       case "combined" => new CombinedCitationTagger(lexiconDir)
       case "default" => new DefaultCitationTagger(lexiconDir)
     }
+
+    log.info(s"label domain size: ${CitationLabelDomain.size}")
+    log.info(s"feature domain size: ${CitationFeaturesDomain.dimensionSize}")
+
     val docs = CitationTaggerTrainer.loadDocs(opts.testFile.value, opts.dataType.value)
+
+    docs.take(2).foreach { doc =>
+      doc.tokens.take(5).foreach { tok =>
+        log.info(s"${tok.string} ${tok.attr[CitationLabel].toString()}")
+      }
+    }
+
+    log.info(s"loaded ${docs.length} docs with ${docs.map(_.tokenCount).sum} tokens")
+
     val labels = docs.flatMap(_.tokens).map(_.attr[CitationLabel]).toIndexedSeq
     OverSegmenter.overSegment(docs, lexiconDir)
     docs.foreach(tagger.process)
-    tagger.evaluation(docs)
+    tagger.evaluation(labels, opts.segmentScheme.value)
   }
-
 
 }

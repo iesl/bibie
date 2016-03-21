@@ -10,13 +10,13 @@ import java.util.logging.Logger
 /**
  * Created by kate on 10/13/15.
  */
-class CombinedCitationTagger(lexiconPath: String) extends AbstractCitationTagger {
+class CombinedCitationTagger(logFilename: Option[String], lexiconPath: String) extends AbstractCitationTagger(logFilename) {
 
   private val logger = Logger.getLogger(getClass.getName)
 
   /* Deserialize this tagger from the model at the given URL */
-  def this(lexiconPath: String, url:java.net.URL) = {
-    this(lexiconPath)
+  def this(logFilename: Option[String], lexiconPath: String, url:java.net.URL) = {
+    this(logFilename, lexiconPath)
     if (url != null) {
       deserialize(url.openConnection.getInputStream)
       logger.info(s"loaded model from ${url.getPath}")
@@ -27,28 +27,22 @@ class CombinedCitationTagger(lexiconPath: String) extends AbstractCitationTagger
   }
 
   /* Deserialize this tagger from the model at the given path on disk */
-  def this(lexiconPath: String, modelPath: String) = {
-    this(lexiconPath, new URL("file://" + modelPath))
+  def this(logFilename: Option[String], lexiconPath: String, modelPath: String) = {
+    this(logFilename, lexiconPath, new URL("file://" + modelPath))
   }
 
   val lexicons: DefaultLexicons = new DefaultLexicons(lexiconPath)
 
-  def addFeatures(doc: Document, training: Boolean = false): Unit = {
-    computeDocumentFeaturesGrobid(doc, training = training)
-    addDefaultFeatures(doc, training = training)
+  def addFeatures(doc: Document): Unit = {
+    computeDocumentFeaturesGrobid(doc)
+    addDefaultFeatures(doc)
   }
 
-  def computeDocumentFeaturesGrobid(doc: Document, training: Boolean): Unit = {
-    if (training) {
-      val sentenceIter = doc.sentences.toIterator
-      while (sentenceIter.hasNext) {
-        val sentence = sentenceIter.next()
-        if (sentence.nonEmpty) {
-          computeTokenFeaturesGrobid(sentence)
-        }
-      }
-    } else {
-      doc.sentences.filter(_.nonEmpty).par.foreach { sentence =>
+  def computeDocumentFeaturesGrobid(doc: Document): Unit = {
+    val sentenceIter = doc.sentences.toIterator
+    while (sentenceIter.hasNext) {
+      val sentence = sentenceIter.next()
+      if (sentence.nonEmpty) {
         computeTokenFeaturesGrobid(sentence)
       }
     }

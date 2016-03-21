@@ -39,8 +39,9 @@ package object bibie {
 
     val saveModel = new CmdOption[Boolean]("save-model", true, "BOOLEAN", "whether or not to save the model")
     val modelFile = new CmdOption[String]("model-file", "bibie.factorie", "STRING", "file to save model to or load model from")
+    val logFile = new CmdOption[String]("log-file", "training.log", "STRING", "where to log messages")
     val lexiconUrl = new CmdOption("lexicons", "classpath:lexicons", "STRING", "path to lexicon files")
-//    val rootPath = new CmdOption[String]("root-path", "", "STRING", "path to directory where you want to save things")
+
 
     /*
 
@@ -55,6 +56,9 @@ package object bibie {
     val l1 = new CmdOption("l1", 0.1, "FLOAT", "l1 regularizer strength")
     val l2 = new CmdOption("l2", 0.1, "FLOAT", "l2 regularizer strength")
     val numIterations = new CmdOption("num-iterations", 5, "INT", "Number of training iterations")
+    val trimBelow = new CmdOption[Int]("trim-below", 0, "INT", "trim features occurring fewer than this many times")
+    val segmentScheme = new CmdOption[String]("segment-scheme", "BIO", "STRING", "scheme for representing token segments: BILOU|BIO")
+
   }
 
   implicit class DocumentExtras(doc: Document) {

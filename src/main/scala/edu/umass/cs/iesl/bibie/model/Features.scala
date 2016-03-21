@@ -6,17 +6,12 @@ import cc.factorie.variable.{BinaryFeatureVectorVariable, CategoricalVectorDomai
 import edu.umass.cs.iesl.bibie.load.PreFeatures
 import edu.umass.cs.iesl.bibie.segment.CitationSpanList
 import edu.umass.cs.iesl.bibie.util.Lexicons
+import scala.collection.mutable.ListBuffer
 
 /**
  * @author Kate Silverstein 
  *         created on 9/13/15
  */
-object CitationFeaturesDomain extends CategoricalVectorDomain[String]
-
-class CitationFeatures(val token: Token) extends BinaryFeatureVectorVariable[String] {
-  def domain = CitationFeaturesDomain
-  override def skipNonCategories = true
-}
 
 class Features(val lexicons: Lexicons) {
 
@@ -36,13 +31,8 @@ class Features(val lexicons: Lexicons) {
 
   var loc = 0
 
-  // TODO: add some global features to baseline CRF - like "containsthesis"
-  def wordToFeatures(token: Token): Unit = {
-    val features = token.attr[CitationFeatures]
-    assert(features != null, "token has no attr CitationFeatures")
-//    val features = new CitationFeatures(token)
-//    val preFeats = token.attr[PreFeatures]
-//    if(preFeats != null) features ++= preFeats.features
+  def wordToFeatures(token: Token): Seq[String] = {
+    val features = new ListBuffer[String]()
     assert(token.document.attr[CitationSpanList] != null, "OverSegmenter has not been run on this document yet (token.document lacks attr CitationSpanList)")
     val docSpans = token.document.attr[CitationSpanList].spans
     val word = token.string
@@ -108,7 +98,7 @@ class Features(val lexicons: Lexicons) {
     if (lower.matches("^p(p|ages|pps|gs)?\\.?")) features += "ISPAGES"
     if (lower.matches("(v\\.?|volume|vol\\.?).*")) features += "VOLUME"
     loc += 1
-    token.attr += features
+    features.toSeq
   }
 
   def count(string: String): (Int, Int) = {
@@ -143,32 +133,32 @@ class Features(val lexicons: Lexicons) {
     }
   }
 
-  def initSentenceFeatures(data: Seq[Document]): Unit = {
-    for (d <- data) {
-      val docLength = d.tokens.size
-      for (token <- d.tokens) {
-        val per = token.position.toDouble / docLength.toDouble
-        val binned = ((per * 60.0) / 5.0).floor
-        token.attr[CitationFeatures] += "BIN=" + binned
-      }
-    }
-
-    for (d <- data) {
-      for (t <- d.tokens) {
-        if (t.nextWindow(10).count(_.string.toLowerCase.matches(".*(ed\\.|editor|eds|editors).*")) > 0) t.attr[CitationFeatures] += "POSSIBLEEDITOR"
-      }
-    }
-
-    for (d <- data) {
-      for (s <- d.sentences) {
-        for (token <- s.tokens) {
-          for (lexicon <- lexicons(token)) {
-            token.attr[CitationFeatures] += "LEX=" + lexicon
-          }
-        }
-        cc.factorie.app.chain.Observations.addNeighboringFeatureConjunctions(s.tokens, (t: Token) => t.attr[CitationFeatures], "^[^@]*$", List(0, 0), List(1), List(2), List(-1), List(-2))
-      }
-    }
-  }
+//  def initSentenceFeatures(data: Seq[Document]): Unit = {
+//    for (d <- data) {
+//      val docLength = d.tokens.size
+//      for (token <- d.tokens) {
+//        val per = token.position.toDouble / docLength.toDouble
+//        val binned = ((per * 60.0) / 5.0).floor
+//        token.attr[CitationFeatures] += "BIN=" + binned
+//      }
+//    }
+//
+//    for (d <- data) {
+//      for (t <- d.tokens) {
+//        if (t.nextWindow(10).count(_.string.toLowerCase.matches(".*(ed\\.|editor|eds|editors).*")) > 0) t.attr[CitationFeatures] += "POSSIBLEEDITOR"
+//      }
+//    }
+//
+//    for (d <- data) {
+//      for (s <- d.sentences) {
+//        for (token <- s.tokens) {
+//          for (lexicon <- lexicons(token)) {
+//            token.attr[CitationFeatures] += "LEX=" + lexicon
+//          }
+//        }
+//        cc.factorie.app.chain.Observations.addNeighboringFeatureConjunctions(s.tokens, (t: Token) => t.attr[CitationFeatures], "^[^@]*$", List(0, 0), List(1), List(2), List(-1), List(-2))
+//      }
+//    }
+//  }
 
 }
