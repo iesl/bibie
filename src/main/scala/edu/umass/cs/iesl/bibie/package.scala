@@ -9,17 +9,6 @@ import edu.umass.cs.iesl.bibie.segment.CitationSpanList
  * Created by strubell on 7/3/15.
  */
 package object bibie {
-  // seed rng with constant for repeatability
-//  implicit val random = new scala.util.Random(0)
-
-//  /* data set id's */
-//  final val DATA_GROBID = "grobid"
-//  final val DATA_UMASS = "umass-citation"
-//
-//  /* feature set id's */
-//  final val FEATURES_GROBID = "grobid"
-//  final val FEATURES_UMASS = "umass"
-//  final val FEATURES_BOTH = "both"
 
   class BibieOptions extends DefaultCmdOptions with cc.factorie.app.nlp.SharedNLPCmdOptions {
     val trainFile = new CmdOption("train-file", "", "STRING", "UMass formatted training file.")

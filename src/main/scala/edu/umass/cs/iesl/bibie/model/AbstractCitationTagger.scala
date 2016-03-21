@@ -24,6 +24,8 @@ abstract class AbstractCitationTagger(logFilename: Option[String]) extends Docum
     }
   }
 
+  val DEFAULT_LABEL = "I-other"
+
   object FeatureDomain extends CategoricalVectorDomain[String]
   class CitationFeatures(val token: Token) extends BinaryFeatureVectorVariable[String] {
     def domain = FeatureDomain
@@ -50,14 +52,14 @@ abstract class AbstractCitationTagger(logFilename: Option[String]) extends Docum
     if (document.sentenceCount > 0) {
       for (sentence <- document.sentences if sentence.tokens.nonEmpty) {
         sentence.tokens.foreach { token => if (!token.attr.contains(classOf[CitationLabel]))
-          token.attr += new CitationLabel("O", token) }
+          token.attr += new CitationLabel(DEFAULT_LABEL, token) }
         val vars = sentence.tokens.map(_.attr[CitationLabel]).toSeq
         model.maximize(vars)(null)
       }
     } else {
       document.tokens.foreach { token =>
         if (!token.attr.contains(classOf[CitationLabel]))
-          token.attr += new CitationLabel("O", token)
+          token.attr += new CitationLabel(DEFAULT_LABEL, token)
       }
       val vars = document.tokens.map(_.attr[CitationLabel]).toSeq
       model.maximize(vars)(null)
