@@ -90,6 +90,8 @@ abstract class AbstractCitationTagger(logFilename: Option[String]) extends Docum
             devDocuments: Seq[Document],
             params: Hyperparams)(implicit random: scala.util.Random): Double = {
     def labels(docs: Seq[Document]): IndexedSeq[CitationLabel] = docs.flatMap(_.tokens).map(_.attr[CitationLabel]).toIndexedSeq
+    // make sure the label domain contains the default category
+    CitationLabelDomain.categories += DEFAULT_LABEL
     val doTest: Boolean = devDocuments.nonEmpty
 
     val infoStr =
