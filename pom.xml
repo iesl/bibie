@@ -9,7 +9,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <scala.majorVersion>2.11</scala.majorVersion>
-    <scala.minorVersion>.7</scala.minorVersion>
+    <scala.minorVersion>.8</scala.minorVersion>
   </properties>
 
   <repositories>
